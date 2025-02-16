@@ -1,10 +1,10 @@
 #
 # Build variables
 #
-SRCNAME 	= asl3-pi-appliance
+SRCNAME 	= asl3-appliance
 PKGNAME 	= $(SRCNAME)
-RELVER 		= 1.9.0
-DEBVER 		= 5
+RELVER 		= 2.0.0
+DEBVER 		= 0.alpha.0
 RELPLAT 	?= deb$(shell lsb_release -rs 2> /dev/null)
 
 prefix          ?= /usr
