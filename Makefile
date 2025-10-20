@@ -12,7 +12,6 @@ docdir			?= $(prefix)/share/doc/$(PKGNAME)
 
 BUILDABLES = \
 	apache2 \
-	bin \
 	cockpit \
 	firewalld \
 	web
