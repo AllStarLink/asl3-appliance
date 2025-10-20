@@ -15,5 +15,5 @@ Depends: ${misc:Depends}, cockpit, cockpit-networkmanager,
  cockpit-packagekit, cockpit-sosreport, cockpit-wifimanager,
  cockpit-storaged, cockpit-system, cockpit-ws, firewalld,
  asl3 (>= 3.3.0), asl3-menu, asl3-update-nodelist, allmon3, vim-nox, avahi-daemon
-Conflicts: asl3-pi-appliance (< 2.0.0)
+Conflicts: asl3-pi-appliance (<< 2.0.0)
 Description: Appliance customization for Debian-based ASL "appliances"
