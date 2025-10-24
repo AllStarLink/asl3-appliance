@@ -1,0 +1,2 @@
+etc/avahi/services/*
+usr/bin/asl-enable-pi-serial

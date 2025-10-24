@@ -12,6 +12,8 @@ docdir			?= $(prefix)/share/doc/$(PKGNAME)
 
 BUILDABLES = \
 	apache2 \
+	avahi \
+	bin \
 	cockpit \
 	firewalld \
 	web
@@ -64,9 +66,9 @@ debprep:	debclean
 		ln -s $(PKGNAME)-$(RELVER).tar.gz $(PKGNAME)_$(RELVER).orig.tar.gz )
 
 debclean:
-	rm -f ../$(PKGNAME)_$(RELVER)*
+	rm -f ../$(PKGNAME)_$(RELVER)* ../$(PKGNAME)-p[ci]_$(RELVER)*
 	rm -f ../$(PKGNAME)-$(RELVER)*
-	rm -rf debian/$(PKGNAME)
+	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi
 	rm -f debian/files
 	rm -rf debian/.debhelper/
 	rm -f debian/debhelper-build-stamp
@@ -74,5 +76,6 @@ debclean:
 	rm -rf debian/$(SRCNAME)/ debian/.debhelper/
 	rm -f debian/debhelper-build-stamp debian/files debian/$(SRCNAME).substvars
 	rm -f debian/*.debhelper
+	rm -rf debian/tmp
 
 	
