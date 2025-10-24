@@ -7,7 +7,6 @@ on:
         description: 'Debian Release Version'
         type: choice
         options:
-          - bookworm
           - trixie
       gh-rel:
         description: 'GitHub Release Tag (for debs)'
