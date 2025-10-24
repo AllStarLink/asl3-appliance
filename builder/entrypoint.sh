@@ -17,7 +17,7 @@ echo "OS_CODENAME: ${OS_CODENAME}"
 cd /build
 
 export EMAIL="AllStarLink <autobuild@allstarlink.org>"
-pushd asl3-pi-appliance
+pushd asl3-appliance
 make deb
 popd
 mkdir _debs
