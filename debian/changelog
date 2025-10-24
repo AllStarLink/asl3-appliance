@@ -1,3 +1,9 @@
+asl3-pi-appliance (2.0.0-0.alpha.0) stable; urgency=medium
+
+  * test release 1 
+
+ -- Jason McCormick <jason@mfamily.org>  Fri, 24 Oct 2025 19:25:21 -0400
+
 asl3-pi-appliance (1.10.1-1) stable; urgency=medium
 
   * Add hook in postinst to fix CustomPiOS-introduced 
