@@ -4,7 +4,7 @@
 SRCNAME 	= asl3-appliance
 PKGNAME 	= $(SRCNAME)
 RELVER 		= 2.0.0
-DEBVER 		= 0.alpha.1
+DEBVER 		= 0.alpha.2
 RELPLAT 	?= deb$(shell lsb_release -rs 2> /dev/null)
 
 prefix          ?= /usr
