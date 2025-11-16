@@ -30,6 +30,7 @@ do_configure() {
 		apache2_invoke enmod headers || exit $?
 		apache2_invoke enconf nocache || exit $?
     fi
+	/usr/share/asl3-appliance/apache2/apply-apache-conf
 
 	# Services to start on boot
 	deb-systemd-invoke enable apache2

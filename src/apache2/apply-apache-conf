@@ -1,0 +1,8 @@
+#!/usr/bin/bash
+
+SRC=/usr/share/asl3-appliance/apache2
+TGT=/etc/apache2/sites-available
+
+sed "s/@@HOSTNAME@@/${HOSTNAME}/" ${SRC}/000-default.conf > ${TGT}/000-default.conf
+sed "s/@@HOSTNAME@@/${HOSTNAME}/" ${SRC}/default-ssl.conf > ${TGT}/default-ssl.conf
+

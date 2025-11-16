@@ -10,3 +10,6 @@ var/www/html/css/*
 usr/share/cockpit/branding/debian-AllStarLink/*
 usr/share/doc/asl3-appliance/*
 usr/share/doc/asl3-appliance/*
+usr/share/asl3-appliance/*
+usr/share/asl3-appliance/apache2/*
+
