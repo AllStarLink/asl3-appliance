@@ -1,3 +1,10 @@
+asl3-appliance (2.0.1-2) stable; urgency=medium
+
+  * Fix Cockpit TLS weaknesses
+  # Fully manage Apache2 configuration 
+
+ -- Jason McCormick <jason@mfamily.org>  Sat, 15 Nov 2025 20:46:49 -0500
+
 asl3-appliance (2.0.0-1) stable; urgency=medium
 
   * Replace asl3-pi-appliance with asl3-appliance* 
