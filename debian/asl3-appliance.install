@@ -2,6 +2,7 @@ etc/firewalld/zones/*
 etc/firewalld/services/*
 etc/cockpit/cockpit.conf
 etc/apache2/conf-available/nocache.conf
+etc/gnutls/config
 var/www/html/*
 var/www/html/js/*
 var/www/html/img/*

@@ -24,7 +24,7 @@ INSTALLABLES = $(ETC_INSTALLABLES) $(BRAND_INSTALLABLES) $(BRAND_BIN_INSTALLABLE
 default:
 	@echo $(INSTALLABLES)
 
-install:	$(INSTALLABLES)
+install:	$(INSTALLABLES) $(DESTDIR)$(sysconfdir)/gnutls/config
 
 $(DESTDIR)$(cockpit_etc)/%:	etc/%
 	install -D -m 0644 $< $@
@@ -35,3 +35,5 @@ $(DESTDIR)$(cockpit_brand)/fix-os-release:	debian-AllStarLink/fix-os-release
 $(DESTDIR)$(cockpit_brand)/%:	debian-AllStarLink/%
 	install -D -m 0644 $< $@
 
+$(DESTDIR)$(sysconfdir)/gnutls/config:	gnutls.config
+	install -D -m 0644 $< $@
