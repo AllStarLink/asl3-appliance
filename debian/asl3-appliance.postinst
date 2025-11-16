@@ -17,8 +17,69 @@
 #
 set -e
 
+if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+    . /usr/share/apache2/apache2-maintscript-helper
+fi
+
 do_configure() {
+
+	#Apache Management
+    if [ -e /usr/sbin/apache2 ]; then
+        apache2_invoke enmod ssl || exit $?
+        apache2_invoke ensite default-ssl || exit $?
+		apache2_invoke enmod headers || exit $?
+		apache2_invoke enconf nocache || exit $?
+    fi
+
+	# Services to start on boot
+	deb-systemd-invoke enable apache2
+	deb-systemd-invoke enable allmon3
+	deb-systemd-invoke enable asterisk
+	deb-systemd-invoke enable firewalld
+	deb-systemd-invoke enable cockpit.socket
+	deb-systemd-invoke enable cockpit
+	deb-systemd-invoke restart apache2
+	deb-systemd-invoke restart allmon3
+	deb-systemd-invoke restart asterisk
+	deb-systemd-invoke restart firewalld
+	deb-systemd-invoke restart cockpit.socket
 	deb-systemd-invoke restart cockpit
+
+
+	# Change default firewalld zone
+	if [ "$(firewall-cmd --state)" = "running" ]; then
+		deb-systemd-invoke reload firewalld
+		firewall-cmd --set-default-zone=allstarlink
+		firewall-cmd --zone=allstarlink --permanent --add-service=echolink
+		firewall-cmd --zone=allstarlink --add-service=echolink
+	else
+		set +e
+		firewall-offline-cmd --set-default-zone=allstarlink
+		firewall-offline-cmd --zone=allstarlink --add-service=echolink
+	fi
+
+	set -e
+
+	# Rewrite the motd
+	cat - > /etc/motd <<EOF
+
+            Welcome to AllStarLink v3
+
+ * A CLI menu is accessible by typing 'sudo asl-menu'
+ * The Asterisk CLI is accessible by typing 'sudo asterisk -rv'
+ * An online manual is located at https://allstarlink.github.io
+ * Package updates are obtained through the Cockpit web
+   console or by typing 'sudo apt update && sudo apt upgrade -y'
+ * This system uses firewalld. Ports are controlled in the
+   Cockpit web console or by using the command:
+     'sudo firewall-cmd -p PORT:TYPE'
+ * For help, visit https://community.allstarlink.org
+
+EOF
+
+	# Customize /etc/os-release
+	/usr/share/cockpit/branding/debian-AllStarLink/fix-os-release
+
 }
 
 case "$1" in
@@ -26,6 +87,7 @@ case "$1" in
 		do_configure
     ;;
 		triggered)
+		/usr/share/cockpit/branding/debian-AllStarLink/fix-os-release
 	;;
 	    abort-upgrade|abort-remove|abort-deconfigure)
     ;;
