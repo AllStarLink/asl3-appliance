@@ -10,6 +10,7 @@ on:
           - trixie
       gh-rel:
         description: 'GitHub Release Tag (for debs)'
+        required: true
         type: string
       aptly-repo:
         description: 'Aptly Repository Stream'
