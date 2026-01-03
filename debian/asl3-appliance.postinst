@@ -44,8 +44,6 @@ do_configure() {
 	deb-systemd-invoke restart asterisk
 	deb-systemd-invoke restart firewalld
 	deb-systemd-invoke restart cockpit.socket
-	deb-systemd-invoke restart cockpit
-
 
 	# Change default firewalld zone
 	if [ "$(firewall-cmd --state)" = "running" ]; then
