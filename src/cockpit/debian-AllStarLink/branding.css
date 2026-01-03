@@ -1,34 +1,21 @@
-body.login-pf {
-  background-color: rgba(0, 0, 0, 0);
-  background-position-x: 0%;
-  background-position-y: 0%;
-  background-repeat: repeat;
-  background-attachment: scroll;
-  background-image: linear-gradient(rgb(115, 181, 31), rgb(92, 145, 24));
-  background-size: auto;
-  background-origin: padding-box;
-  background-clip: border-box;
-  border-color: #5c9118;
-
+html body.login-pf {  
+   background: linear-gradient(#73B51F, #5c9118);
 }
 
 #badge {
-/* width: 80px;
-/  height: 80px; */
+    width: 335px;
+    height: 231px;
     background-image: url("logo.png");
     background-size: contain;
     background-repeat: no-repeat;
+    border-radius: var(--pf-t--global--border--radius--large);
 }
 
-#brand {
-    font-size: 18pt;
-    text-transform: uppercase;
+#brand::before {
+    color: white;
+    content: "<b>${VARIANT}</b><br><span class='asl-brand-sm'>${NAME}</span>";
 }
 
-#brand:before {
-    content: "${VARIANT}";
-}
-
-#index-brand:before {
-    content: "${VARIANT}";
+.asl-brand-sm {
+    font-size: 0.8em;
 }
