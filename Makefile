@@ -3,7 +3,7 @@
 #
 SRCNAME 	= asl3-appliance
 PKGNAME 	= $(SRCNAME)
-RELVER 		= 2.0.1
+RELVER 		= 2.1.0
 DEBVER 		= 2
 RELPLAT 	?= deb$(shell lsb_release -rs 2> /dev/null)
 
