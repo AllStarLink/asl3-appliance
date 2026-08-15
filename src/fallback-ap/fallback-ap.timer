@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the ASL3 fallback AP watchdog periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
