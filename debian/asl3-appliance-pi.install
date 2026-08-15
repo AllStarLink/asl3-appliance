@@ -1,2 +1,5 @@
 etc/avahi/services/*
+etc/default/fallback-ap*
+lib/systemd/system/fallback-ap*
 usr/bin/asl-enable-pi-serial
+usr/libexec/asl3/fallback-ap*

@@ -25,6 +25,7 @@ do_configure() {
 	rm -f /etc/avahi/services/http.service /etc/avahi/services/https.service /etc/avahi/services/cockpit.service
 	deb-systemd-invoke enable avahi-daemon
 	deb-systemd-invoke restart avahi-daemon
+	deb-systemd-invoke enable fallback-ap.timer
 
 	# Customize dphys-swapfile if its installed
 	if [ -f /etc/dphys-swapfile ]; then
@@ -40,7 +41,6 @@ do_configure() {
 			fi
 		fi
 		deb-systemd-invoke enable dphys-swapfile
-	
 	fi
 
 }
