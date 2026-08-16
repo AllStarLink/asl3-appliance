@@ -3,10 +3,19 @@
 fallback-ap-watchdog.py — bring up a NetworkManager AP profile if the
 host has no usable connectivity, so Cockpit stays reachable for
 bootstrapping. Bootstrap-only: no static gateway is configured by this
-script itself; IPv4/IPv6 addressing and DHCP/RA for the fallback subnet
-are provided by NetworkManager's own "shared" method, which is fully
-tied to this connection's activation lifecycle (starts on activation,
-torn down automatically on deactivation).
+script itself; IPv4 addressing and DHCP for the fallback subnet are
+provided by NetworkManager's own "shared" method, which is fully tied
+to this connection's activation lifecycle (starts on activation, torn
+down automatically on deactivation).
+
+IPv4-only, deliberately: the subnet is pinned to APIPA space
+(169.254.0.0/16, RFC 3927) rather than RFC 1918 space so it can never
+collide with a real network the client is also attached to. IPv6 is
+disabled outright rather than paired with a ULA — a ULA prefix is not
+a global unicast address, and Windows' NCSI explicitly downgrades an
+interface without one to "local" connectivity without ever running the
+active probe that would otherwise trigger captive-portal detection, so
+a ULA-only AP interface would carry that liability for no benefit.
 
 Configuration is read from environment variables, normally supplied by
 systemd via EnvironmentFile=/etc/default/asl3-fallback-ap.
@@ -25,6 +34,19 @@ log = logging.getLogger("fallback-ap")
 
 STATE_FILE = Path("/run/fallback-ap-watchdog/suppressed-connections.json")
 
+# NM reads this directory's *.conf snippets into the dnsmasq instance it
+# spawns for any "shared"-method connection (see nm-settings(5), ipv4.method
+# = shared). Used here to blackhole DNS on the AP subnet so every hostname a
+# client looks up resolves to the gateway — which is what actually trips a
+# client OS's captive-portal detection.
+DNSMASQ_SHARED_DIR = Path("/etc/NetworkManager/dnsmasq-shared.d")
+DNSMASQ_SHARED_CONF = DNSMASQ_SHARED_DIR / "asl-fallback-ap.conf"
+
+# The full RFC 3927 APIPA block. Used to scope Apache's reverse proxy to
+# fallback-AP clients regardless of which address inside it AP_IPV4_CIDR
+# picks — see src/apache2/000-default.conf.
+APIPA_NETWORK = ipaddress.IPv4Network("169.254.0.0/16")
+
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -34,45 +56,36 @@ def load_config() -> dict:
     cfg = {
         "ssid_prefix": os.environ.get("AP_SSID_PREFIX", "AllStarLink_"),
         "psk": os.environ.get("AP_PSK", ""),
-        "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "192.168.252.1/24"),
-        "ipv6_cidr": os.environ.get("AP_IPV6_CIDR", "fd75:9d2a:4e3c::1/64"),
+        "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "169.254.252.1/24"),
         "band": os.environ.get("AP_BAND", "bg"),
         "channel": os.environ.get("AP_CHANNEL", "11 "),
         "conn_name": os.environ.get("AP_CONN_NAME", "asl-fallback-ap"),
     }
-    validate_ipv4_cidr(cfg["ipv4_cidr"])
-    validate_ula_cidr(cfg["ipv6_cidr"])
+    validate_apipa_cidr(cfg["ipv4_cidr"])
     return cfg
 
 
-def validate_ipv4_cidr(cidr: str) -> None:
+def validate_apipa_cidr(cidr: str) -> None:
+    """Confirm AP_IPV4_CIDR is a well-formed address within APIPA space (169.254.0.0/16).
+
+    Apache's reverse proxy to Cockpit (see src/apache2/000-default.conf) is
+    scoped to the whole 169.254.0.0/16 block rather than templated to this
+    specific address, so straying outside it silently breaks that proxy.
+    """
     if not cidr or "/" not in cidr:
-        log.error("AP_IPV4_CIDR must be in address/prefix form, e.g. 192.168.4.1/24")
+        log.error("AP_IPV4_CIDR must be in address/prefix form, e.g. 169.254.252.1/24")
         sys.exit(1)
     try:
-        ipaddress.IPv4Interface(cidr)
+        addr = ipaddress.IPv4Interface(cidr)
     except ValueError as e:
         log.error("AP_IPV4_CIDR '%s' is not valid: %s", cidr, e)
         sys.exit(1)
 
-
-def validate_ula_cidr(cidr: str) -> None:
-    """Confirm AP_IPV6_CIDR is a well-formed address in the ULA range (fc00::/7)."""
-    if not cidr or "/" not in cidr:
-        log.error("AP_IPV6_CIDR must be in address/prefix form, e.g. fd00:a5:3a::1/64")
-        sys.exit(1)
-    try:
-        addr = ipaddress.IPv6Interface(cidr)
-    except ValueError as e:
-        log.error("AP_IPV6_CIDR '%s' is not a valid IPv6 address/prefix: %s", cidr, e)
-        sys.exit(1)
-
-    ula_range = ipaddress.IPv6Network("fc00::/7")
-    if addr.ip not in ula_range:
+    if addr.ip not in APIPA_NETWORK:
         log.error(
-            "AP_IPV6_CIDR '%s' is not within the ULA range fc00::/7. "
-            "Note: legacy 'site-local' (fec0::/10) is deprecated (RFC 3879) — "
-            "use an fd00::/8 ULA prefix instead.",
+            "AP_IPV4_CIDR '%s' is not within APIPA space (169.254.0.0/16). "
+            "This range is used deliberately so the fallback AP's subnet can "
+            "never collide with a real network — see the module docstring.",
             cidr,
         )
         sys.exit(1)
@@ -171,12 +184,11 @@ def ensure_ap_profile(ifname: str, cfg: dict) -> None:
         "802-11-wireless.mode", "ap",
         "802-11-wireless.band", cfg["band"],
         "802-11-wireless.channel", cfg["channel"],
-        # shared = NM-managed scoped dnsmasq instance for DHCP/RA, fully
-        # tied to this connection's lifecycle. No process for us to manage.
+        # shared = NM-managed scoped dnsmasq instance for DHCP, fully tied
+        # to this connection's lifecycle. No process for us to manage.
         "ipv4.method", "shared",
         "ipv4.addresses", cfg["ipv4_cidr"],
-        "ipv6.method", "shared",
-        "ipv6.addresses", cfg["ipv6_cidr"],
+        "ipv6.method", "disabled",
         "connection.autoconnect-priority", "-999",
         # Without an explicit zone, NM binds "shared" connections to its own
         # built-in nm-shared firewalld zone (dhcp/dns/ssh only) instead of
@@ -195,6 +207,21 @@ def ensure_ap_profile(ifname: str, cfg: dict) -> None:
     if result.returncode != 0:
         log.error("Failed to create AP profile: %s", result.stderr.strip())
         sys.exit(1)
+
+
+def write_dns_blackhole(cfg: dict) -> None:
+    """Make the AP's dnsmasq answer every hostname with the gateway's own
+    address, so a client's captive-portal probe (which expects a specific
+    real-internet response) instead gets redirected to the appliance —
+    that mismatch is what triggers the OS's captive-portal browser popup.
+
+    Applies to every NM "shared" connection on this host, not just this
+    one, since dnsmasq-shared.d is a single global directory — harmless
+    here since the fallback AP is the only shared connection in use.
+    """
+    gateway = ipaddress.IPv4Interface(cfg["ipv4_cidr"]).ip
+    DNSMASQ_SHARED_DIR.mkdir(parents=True, exist_ok=True)
+    DNSMASQ_SHARED_CONF.write_text(f"address=/#/{gateway}\n")
 
 
 # --------------------------------------------------------------------------
@@ -287,6 +314,8 @@ def main() -> int:
     if len(wireless_ifaces) > 1:
         log.info("Multiple wireless interfaces found (%s); using %s",
                   ", ".join(wireless_ifaces), ifname)
+
+    write_dns_blackhole(cfg)
 
     if not ap_profile_exists(cfg["conn_name"]):
         ensure_ap_profile(ifname, cfg)

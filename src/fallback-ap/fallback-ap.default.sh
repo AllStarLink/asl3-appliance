@@ -8,16 +8,16 @@ AP_SSID_PREFIX="AllStarLink_"
 AP_PSK="AllStarLinkSetup"
 
 # IPv4 address/prefix assigned to the AP interface (DHCP served via
-# NetworkManager's shared method, scoped to this connection's lifecycle)
-AP_IPV4_CIDR="192.168.252.1/24"
+# NetworkManager's shared method, scoped to this connection's lifecycle).
+# Deliberately APIPA space (169.254.0.0/16, RFC 3927) rather than RFC 1918
+# space: it can never collide with a real network the client is also
+# attached to. Must stay within 169.254.0.0/16 — Apache's reverse proxy to
+# Cockpit (src/apache2/000-default.conf) is scoped to that whole block, not
+# templated to this specific address.
+AP_IPV4_CIDR="169.254.252.1/24"
 
-# IPv6 Unique Local Address (ULA) prefix/address for the AP interface,
-# also via ipv6.method=shared. Must fall within fc00::/7 (fd00::/8 in
-# practice). Generate a proper random ULA prefix once per deployment/image:
-#   python3 -c "import secrets;print('fd'+secrets.token_hex(5))"
-# and bake it into the image rather than leaving every appliance on the
-# same guessable default.
-AP_IPV6_CIDR="fd75:9d2a:4e3c::1/64"
+# IPv6 is intentionally not offered on the fallback AP — see the module
+# docstring in fallback-ap-watchdog.py for why a ULA doesn't help here.
 
 # 802.11 band: bg (2.4GHz) or a (5GHz), depending on adapter support
 AP_BAND="bg"
