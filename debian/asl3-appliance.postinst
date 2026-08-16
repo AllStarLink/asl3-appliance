@@ -42,7 +42,6 @@ do_configure() {
 	deb-systemd-invoke enable asterisk
 	deb-systemd-invoke enable firewalld
 	deb-systemd-invoke enable cockpit.socket
-	deb-systemd-invoke enable cockpit
 	deb-systemd-invoke restart apache2
 	deb-systemd-invoke restart allmon3
 	deb-systemd-invoke restart asterisk
