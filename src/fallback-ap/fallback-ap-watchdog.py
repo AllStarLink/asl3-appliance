@@ -8,14 +8,29 @@ provided by NetworkManager's own "shared" method, which is fully tied
 to this connection's activation lifecycle (starts on activation, torn
 down automatically on deactivation).
 
-IPv4-only, deliberately: the subnet is pinned to APIPA space
-(169.254.0.0/16, RFC 3927) rather than RFC 1918 space so it can never
-collide with a real network the client is also attached to. IPv6 is
-disabled outright rather than paired with a ULA — a ULA prefix is not
-a global unicast address, and Windows' NCSI explicitly downgrades an
-interface without one to "local" connectivity without ever running the
-active probe that would otherwise trigger captive-portal detection, so
-a ULA-only AP interface would carry that liability for no benefit.
+IPv4-only, deliberately: the subnet is pinned to the RFC 2544
+benchmarking block (198.18.0.0/15) rather than RFC 1918 space, so it
+can never collide with a real network the client is also attached to.
+Most operators here aren't networking-savvy, so avoiding RFC 1918 is
+the priority; anyone actually running RFC 2544 benchmark gear or
+Fake-IP VPN/proxy tooling (e.g. Clash, sing-box) that claims this block
+is, definitionally, someone who knows how to override AP_IPV4_CIDR.
+
+Two other ranges were tried and rejected first: APIPA (169.254.0.0/16)
+— iOS refuses to fully join a network whose DHCP-assigned address
+falls in that block at all, treating a lease there the same as "no
+DHCP server responded" regardless of who issued it — and RFC 6598
+Carrier-Grade NAT space (100.64.0.0/10), which is exactly the kind of
+range a networking-literate operator (or their upstream ISP) may
+already have in active use, the same problem this is meant to avoid.
+198.18.0.0/15 has no client-OS self-assignment special-casing like
+APIPA does — it's just an ordinary, if obscure, reserved block.
+
+IPv6 is disabled outright rather than paired with a ULA — a ULA prefix
+is not a global unicast address, and Windows' NCSI explicitly downgrades
+an interface without one to "local" connectivity without ever running
+the active probe that would otherwise trigger captive-portal detection,
+so a ULA-only AP interface would carry that liability for no benefit.
 
 Configuration is read from environment variables, normally supplied by
 systemd via EnvironmentFile=/etc/default/asl3-fallback-ap.
@@ -42,10 +57,10 @@ STATE_FILE = Path("/run/fallback-ap-watchdog/suppressed-connections.json")
 DNSMASQ_SHARED_DIR = Path("/etc/NetworkManager/dnsmasq-shared.d")
 DNSMASQ_SHARED_CONF = DNSMASQ_SHARED_DIR / "asl-fallback-ap.conf"
 
-# The full RFC 3927 APIPA block. Used to scope Apache's reverse proxy to
-# fallback-AP clients regardless of which address inside it AP_IPV4_CIDR
-# picks — see src/apache2/000-default.conf.
-APIPA_NETWORK = ipaddress.IPv4Network("169.254.0.0/16")
+# The full RFC 2544 benchmarking block. Used to scope Apache's reverse
+# proxy to fallback-AP clients regardless of which address inside it
+# AP_IPV4_CIDR picks — see src/apache2/000-default.conf.
+BENCHMARK_NETWORK = ipaddress.IPv4Network("198.18.0.0/15")
 
 
 # --------------------------------------------------------------------------
@@ -56,24 +71,25 @@ def load_config() -> dict:
     cfg = {
         "ssid_prefix": os.environ.get("AP_SSID_PREFIX", "AllStarLink_"),
         "psk": os.environ.get("AP_PSK", ""),
-        "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "169.254.252.1/24"),
+        "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "198.18.252.1/24"),
         "band": os.environ.get("AP_BAND", "bg"),
         "channel": os.environ.get("AP_CHANNEL", "11 "),
         "conn_name": os.environ.get("AP_CONN_NAME", "asl-fallback-ap"),
     }
-    validate_apipa_cidr(cfg["ipv4_cidr"])
+    validate_benchmark_cidr(cfg["ipv4_cidr"])
     return cfg
 
 
-def validate_apipa_cidr(cidr: str) -> None:
-    """Confirm AP_IPV4_CIDR is a well-formed address within APIPA space (169.254.0.0/16).
+def validate_benchmark_cidr(cidr: str) -> None:
+    """Confirm AP_IPV4_CIDR is a well-formed address within RFC 2544
+    benchmarking space (198.18.0.0/15).
 
     Apache's reverse proxy to Cockpit (see src/apache2/000-default.conf) is
-    scoped to the whole 169.254.0.0/16 block rather than templated to this
+    scoped to the whole 198.18.0.0/15 block rather than templated to this
     specific address, so straying outside it silently breaks that proxy.
     """
     if not cidr or "/" not in cidr:
-        log.error("AP_IPV4_CIDR must be in address/prefix form, e.g. 169.254.252.1/24")
+        log.error("AP_IPV4_CIDR must be in address/prefix form, e.g. 198.18.252.1/24")
         sys.exit(1)
     try:
         addr = ipaddress.IPv4Interface(cidr)
@@ -81,11 +97,12 @@ def validate_apipa_cidr(cidr: str) -> None:
         log.error("AP_IPV4_CIDR '%s' is not valid: %s", cidr, e)
         sys.exit(1)
 
-    if addr.ip not in APIPA_NETWORK:
+    if addr.ip not in BENCHMARK_NETWORK:
         log.error(
-            "AP_IPV4_CIDR '%s' is not within APIPA space (169.254.0.0/16). "
-            "This range is used deliberately so the fallback AP's subnet can "
-            "never collide with a real network — see the module docstring.",
+            "AP_IPV4_CIDR '%s' is not within RFC 2544 benchmarking space "
+            "(198.18.0.0/15). This range is used deliberately so the "
+            "fallback AP's subnet can never collide with a real network — "
+            "see the module docstring.",
             cidr,
         )
         sys.exit(1)
