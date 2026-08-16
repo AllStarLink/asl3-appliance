@@ -22,5 +22,8 @@ AP_IPV6_CIDR="fd75:9d2a:4e3c::1/64"
 # 802.11 band: bg (2.4GHz) or a (5GHz), depending on adapter support
 AP_BAND="bg"
 
+# WiFi Channel - has to match a channel in AP_BAND
+AP_CHANNEL="11"
+
 # Name of the NetworkManager connection profile the watchdog manages
 AP_CONN_NAME="asl-fallback-ap"

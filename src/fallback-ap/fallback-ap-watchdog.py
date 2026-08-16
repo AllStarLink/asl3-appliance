@@ -37,6 +37,7 @@ def load_config() -> dict:
         "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "192.168.252.1/24"),
         "ipv6_cidr": os.environ.get("AP_IPV6_CIDR", "fd75:9d2a:4e3c::1/64"),
         "band": os.environ.get("AP_BAND", "bg"),
+        "channel": os.environ.get("AP_CHANNEL", "11 "),
         "conn_name": os.environ.get("AP_CONN_NAME", "asl-fallback-ap"),
     }
     validate_ipv4_cidr(cfg["ipv4_cidr"])
@@ -169,6 +170,7 @@ def ensure_ap_profile(ifname: str, cfg: dict) -> None:
         "ssid", cfg["ssid"],
         "802-11-wireless.mode", "ap",
         "802-11-wireless.band", cfg["band"],
+        "802-11-wireless.channel", cfg["channel"],
         # shared = NM-managed scoped dnsmasq instance for DHCP/RA, fully
         # tied to this connection's lifecycle. No process for us to manage.
         "ipv4.method", "shared",
@@ -176,6 +178,11 @@ def ensure_ap_profile(ifname: str, cfg: dict) -> None:
         "ipv6.method", "shared",
         "ipv6.addresses", cfg["ipv6_cidr"],
         "connection.autoconnect-priority", "-999",
+        # Without an explicit zone, NM binds "shared" connections to its own
+        # built-in nm-shared firewalld zone (dhcp/dns/ssh only) instead of
+        # this system's default zone, silently blocking Cockpit/http/https
+        # and the other allstarlink.xml services on the AP interface.
+        "connection.zone", "allstarlink",
     ]
 
     if cfg["psk"]:
@@ -283,6 +290,11 @@ def main() -> int:
 
     if not ap_profile_exists(cfg["conn_name"]):
         ensure_ap_profile(ifname, cfg)
+    else:
+        # Self-heal profiles created before connection.zone was pinned
+        # (see ensure_ap_profile) so they don't silently fall back to NM's
+        # nm-shared firewalld zone.
+        nmcli("connection", "modify", cfg["conn_name"], "connection.zone", "allstarlink")
 
     state = get_connectivity_state()
     log.info("Connectivity state: %s", state)
