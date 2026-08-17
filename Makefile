@@ -69,7 +69,7 @@ debprep:	debclean
 debclean:
 	rm -f ../$(PKGNAME)_$(RELVER)* ../$(PKGNAME)-p[ci]_$(RELVER)*
 	rm -f ../$(PKGNAME)-$(RELVER)*
-	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi
+	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi debian/asl3-pi-appliance
 	rm -f debian/files
 	rm -rf debian/.debhelper/
 	rm -f debian/debhelper-build-stamp
@@ -79,4 +79,4 @@ debclean:
 	rm -f debian/*.debhelper
 	rm -rf debian/tmp
 
-	
+
