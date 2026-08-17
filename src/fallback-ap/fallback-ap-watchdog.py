@@ -8,23 +8,23 @@ provided by NetworkManager's own "shared" method, which is fully tied
 to this connection's activation lifecycle (starts on activation, torn
 down automatically on deactivation).
 
-IPv4-only, deliberately: the subnet is pinned to the RFC 2544
-benchmarking block (198.18.0.0/15) rather than RFC 1918 space, so it
-can never collide with a real network the client is also attached to.
-Most operators here aren't networking-savvy, so avoiding RFC 1918 is
-the priority; anyone actually running RFC 2544 benchmark gear or
-Fake-IP VPN/proxy tooling (e.g. Clash, sing-box) that claims this block
-is, definitionally, someone who knows how to override AP_IPV4_CIDR.
-
-Two other ranges were tried and rejected first: APIPA (169.254.0.0/16)
-— iOS refuses to fully join a network whose DHCP-assigned address
-falls in that block at all, treating a lease there the same as "no
-DHCP server responded" regardless of who issued it — and RFC 6598
-Carrier-Grade NAT space (100.64.0.0/10), which is exactly the kind of
-range a networking-literate operator (or their upstream ISP) may
-already have in active use, the same problem this is meant to avoid.
-198.18.0.0/15 has no client-OS self-assignment special-casing like
-APIPA does — it's just an ordinary, if obscure, reserved block.
+IPv4-only, deliberately: the subnet is a fixed, narrow RFC 1918 window
+(192.168.187.64/29 — 6 usable addresses, plenty for one bootstrapping
+client at a time) rather than a global reserved block. Three reserved
+ranges were tried before this and each failed in real-world testing:
+APIPA (169.254.0.0/16) — iOS refuses to fully join a network whose
+DHCP-assigned address falls in that block at all, treating a lease
+there the same as "no DHCP server responded" regardless of who issued
+it; RFC 6598 Carrier-Grade NAT space (100.64.0.0/10) — exactly the
+kind of range a networking-literate operator's own environment may
+already use; and the RFC 2544 benchmarking block (198.18.0.0/15),
+which also didn't work in practice on real hardware/clients (root
+cause not conclusively isolated — possibly the same class of issue,
+possibly unrelated AP-mode reliability problems). Given that track
+record, a small, obscure corner of RFC 1918 space that a home/office
+router would be very unlikely to already be using is the pragmatic
+choice — the residual collision risk this was meant to avoid entirely
+is accepted as unavoidable rather than chased further.
 
 IPv6 is disabled outright rather than paired with a ULA — a ULA prefix
 is not a global unicast address, and Windows' NCSI explicitly downgrades
@@ -57,10 +57,10 @@ STATE_FILE = Path("/run/fallback-ap-watchdog/suppressed-connections.json")
 DNSMASQ_SHARED_DIR = Path("/etc/NetworkManager/dnsmasq-shared.d")
 DNSMASQ_SHARED_CONF = DNSMASQ_SHARED_DIR / "asl-fallback-ap.conf"
 
-# The full RFC 2544 benchmarking block. Used to scope Apache's reverse
-# proxy to fallback-AP clients regardless of which address inside it
-# AP_IPV4_CIDR picks — see src/apache2/000-default.conf.
-BENCHMARK_NETWORK = ipaddress.IPv4Network("198.18.0.0/15")
+# The fixed, narrow window the fallback AP's subnet lives in. Used to scope
+# Apache's reverse proxy to fallback-AP clients regardless of which address
+# inside it AP_IPV4_CIDR picks — see src/apache2/000-default.conf.
+AP_NETWORK = ipaddress.IPv4Network("192.168.187.64/29")
 
 
 # --------------------------------------------------------------------------
@@ -71,25 +71,25 @@ def load_config() -> dict:
     cfg = {
         "ssid_prefix": os.environ.get("AP_SSID_PREFIX", "AllStarLink_"),
         "psk": os.environ.get("AP_PSK", ""),
-        "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "198.18.252.1/24"),
+        "ipv4_cidr": os.environ.get("AP_IPV4_CIDR", "192.168.187.65/29"),
         "band": os.environ.get("AP_BAND", "bg"),
         "channel": os.environ.get("AP_CHANNEL", "11 "),
         "conn_name": os.environ.get("AP_CONN_NAME", "asl-fallback-ap"),
     }
-    validate_benchmark_cidr(cfg["ipv4_cidr"])
+    validate_ap_cidr(cfg["ipv4_cidr"])
     return cfg
 
 
-def validate_benchmark_cidr(cidr: str) -> None:
-    """Confirm AP_IPV4_CIDR is a well-formed address within RFC 2544
-    benchmarking space (198.18.0.0/15).
+def validate_ap_cidr(cidr: str) -> None:
+    """Confirm AP_IPV4_CIDR is a well-formed address within the fallback
+    AP's fixed window (192.168.187.64/29).
 
     Apache's reverse proxy to Cockpit (see src/apache2/000-default.conf) is
-    scoped to the whole 198.18.0.0/15 block rather than templated to this
-    specific address, so straying outside it silently breaks that proxy.
+    scoped to that whole /29 rather than templated to this specific
+    address, so straying outside it silently breaks that proxy.
     """
     if not cidr or "/" not in cidr:
-        log.error("AP_IPV4_CIDR must be in address/prefix form, e.g. 198.18.252.1/24")
+        log.error("AP_IPV4_CIDR must be in address/prefix form, e.g. 192.168.187.65/29")
         sys.exit(1)
     try:
         addr = ipaddress.IPv4Interface(cidr)
@@ -97,11 +97,11 @@ def validate_benchmark_cidr(cidr: str) -> None:
         log.error("AP_IPV4_CIDR '%s' is not valid: %s", cidr, e)
         sys.exit(1)
 
-    if addr.ip not in BENCHMARK_NETWORK:
+    if addr.ip not in AP_NETWORK:
         log.error(
-            "AP_IPV4_CIDR '%s' is not within RFC 2544 benchmarking space "
-            "(198.18.0.0/15). This range is used deliberately so the "
-            "fallback AP's subnet can never collide with a real network — "
+            "AP_IPV4_CIDR '%s' is not within the fallback AP's fixed window "
+            "(192.168.187.64/29). This range is used deliberately so the "
+            "fallback AP's subnet stays out of common RFC 1918 territory — "
             "see the module docstring.",
             cidr,
         )

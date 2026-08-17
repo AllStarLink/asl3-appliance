@@ -29,10 +29,6 @@ do_configure() {
         apache2_invoke ensite default-ssl || exit $?
 		apache2_invoke enmod headers || exit $?
 		apache2_invoke enconf nocache || exit $?
-		# Needed for the fallback-AP -> Cockpit reverse proxy in
-		# 000-default.conf (src/fallback-ap)
-		apache2_invoke enmod proxy || exit $?
-		apache2_invoke enmod proxy_http || exit $?
     fi
 	/usr/share/asl3-appliance/apache2/apply-apache-conf
 
