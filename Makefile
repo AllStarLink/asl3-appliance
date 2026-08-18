@@ -19,9 +19,11 @@ BUILDABLES = \
 	firewalld \
 	web
 
-#ifdef DESTDIR
+ifdef DESTDIR
 FULL_DESTDIR = $(shell readlink -f $(DESTDIR))
-#endif
+else
+FULL_DESTDIR := 
+endif
 
 ROOT_FILES = LICENSE README.md
 ROOT_INSTALLABLES = $(patsubst %, $(DESTDIR)$(docdir)/%, $(ROOT_FILES))
