@@ -18,7 +18,6 @@
        list above because that would accept DHCP/DNS server traffic from
        any source in the zone, not just fallback-AP clients. -->
   <rule family="ipv4">
-    <source address="192.168.187.64/29"/>
     <service name="dhcp"/>
     <accept/>
   </rule>
