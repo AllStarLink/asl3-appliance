@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" class="h-100" data-bs-theme="auto">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="AllStarLink Inc.">
+    <title>AllStarLink Setup</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/cover.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="img/allstar-logo-small.png">
+  </head>
+  <body class="h-100 text-center text-bg-dark">
+    <header>
+      <div class="container-fluid text-center py-3">
+        <div class="row justify-content-between">
+          <div class="col-4 header-col-contents"><img src="img/allstar-logo-small.png"></div>
+          <div class="col-4 header-col-contents"><h2>AllStarLink 3 Setup</h2></div>
+        </div>
+      </div>
+    </header>
+    <main class="px-3">
+      <div class="container px-4 py-5" id="custom-cards">
+        <p>You're connected to this node's temporary setup Wi-Fi network. Use
+          the Web Admin Portal to finish configuring the node, then this
+          network will no longer be needed.</p>
+        <p class="py-3">
+          <a id="cockpit-link" href="#" class="btn btn-light btn-lg" role="button">Open Web Admin Portal</a>
+        </p>
+        <p>This node uses a self-signed certificate, so your browser will show
+          a security warning before it lets you in — that's expected and safe
+          to accept here, the same as on any AllStarLink node without its own
+          certificate installed.</p>
+      </div>
+    </main>
+
+    <footer class="mt-auto text-white-50">
+      <p>AllStarLink 3 Appliance - All source code is available under terms
+        of various open source licenses including the GPL, AGPLv3, and BSD licenses.</p>
+    </footer>
+
+    <script>
+      document.getElementById('cockpit-link').href = 'https://' + location.hostname + ':9090/';
+    </script>
+  </body>
+</html>

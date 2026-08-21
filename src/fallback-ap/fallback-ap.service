@@ -1,0 +1,9 @@
+[Unit]
+Description=ASL3 fallback AP watchdog
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/fallback-ap
+ExecStart=/usr/libexec/asl3/fallback-ap-watchdog.py

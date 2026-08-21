@@ -3,7 +3,7 @@
 #
 SRCNAME 	= asl3-appliance
 PKGNAME 	= $(SRCNAME)
-RELVER 		= 2.1.0
+RELVER 		= 2.1.4
 DEBVER 		= 2
 RELPLAT 	?= deb$(shell lsb_release -rs 2> /dev/null)
 
@@ -15,12 +15,15 @@ BUILDABLES = \
 	avahi \
 	bin \
 	cockpit \
+	fallback-ap \
 	firewalld \
 	web
 
-#ifdef DESTDIR
+ifdef DESTDIR
 FULL_DESTDIR = $(shell readlink -f $(DESTDIR))
-#endif
+else
+FULL_DESTDIR := 
+endif
 
 ROOT_FILES = LICENSE README.md
 ROOT_INSTALLABLES = $(patsubst %, $(DESTDIR)$(docdir)/%, $(ROOT_FILES))
@@ -68,7 +71,7 @@ debprep:	debclean
 debclean:
 	rm -f ../$(PKGNAME)_$(RELVER)* ../$(PKGNAME)-p[ci]_$(RELVER)*
 	rm -f ../$(PKGNAME)-$(RELVER)*
-	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi
+	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi debian/asl3-pi-appliance
 	rm -f debian/files
 	rm -rf debian/.debhelper/
 	rm -f debian/debhelper-build-stamp
@@ -78,4 +81,4 @@ debclean:
 	rm -f debian/*.debhelper
 	rm -rf debian/tmp
 
-	
+

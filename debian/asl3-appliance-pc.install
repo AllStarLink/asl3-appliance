@@ -1,1 +1,4 @@
 etc/avahi/services/*
+etc/default/fallback-ap*
+lib/systemd/system/fallback-ap*
+usr/libexec/asl3/fallback-ap*

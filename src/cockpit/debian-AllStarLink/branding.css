@@ -1,5 +1,9 @@
-html body.login-pf {  
-   background: linear-gradient(#73B51F, #5c9118);
+html body.login-pf {
+    background-image: url("aslbg.webp"), linear-gradient(#73B51F, #5c9118);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
 }
 
 #badge {

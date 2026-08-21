@@ -12,5 +12,19 @@
   <service name="iax2"/>
   <service name="rtcm"/>
   <forward/>
+  <!-- The fallback AP (src/fallback-ap) runs its own DHCP/DNS server on the
+       host, scoped to its fixed subnet window (see AP_NETWORK in
+       fallback-ap-watchdog.py). Neither is in the zone's plain <service>
+       list above because that would accept DHCP/DNS server traffic from
+       any source in the zone, not just fallback-AP clients. -->
+  <rule family="ipv4">
+    <service name="dhcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.187.64/29"/>
+    <service name="dns"/>
+    <accept/>
+  </rule>
 </zone>
 
