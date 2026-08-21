@@ -5,7 +5,7 @@
 AP_SSID_PREFIX="AllStarLink_"
 
 # WPA2-PSK passphrase (8-63 chars). Leave empty for an open (unencrypted) network.
-AP_PSK="AllStarLinkSetup"
+AP_PSK="AllStarLink"
 
 # IPv4 address/prefix assigned to the AP interface (DHCP served via
 # NetworkManager's shared method, scoped to this connection's lifecycle).
