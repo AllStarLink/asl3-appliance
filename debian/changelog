@@ -1,3 +1,9 @@
+asl3-appliance (2.2.0-1) stable; urgency=medium
+
+  * Implement an auto fallback AP for wifi configuration 
+
+ -- Helium <jason@mfamily.org>  Fri, 21 Aug 2026 14:34:56 -0400
+
 asl3-appliance (2.1.0-2) stable; urgency=medium
 
   * Fix login page branding to work with Cockpit 337+
