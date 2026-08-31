@@ -26,8 +26,10 @@ do_configure() {
 	deb-systemd-invoke enable avahi-daemon
 	deb-systemd-invoke restart avahi-daemon
 
-	if [ "$(dpkg-query -W -f='${Version}' asl3-appliance-pc)" = "2.2.1-1.deb13" ]; then
+	if [ "$(dpkg-query -W -f='${Version}' asl3-appliance-pi)" = "2.2.1-1.deb13" ]; then
+		deb-systemd-invoke stop fallback-ap.timer
 		deb-systemd-invoke disable fallback-ap.timer
+		nmcli connection delete asl-fallback-ap
 	fi
 
 
