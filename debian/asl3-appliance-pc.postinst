@@ -25,7 +25,10 @@ do_configure() {
 	rm -f /etc/avahi/services/http.service /etc/avahi/services/https.service /etc/avahi/services/cockpit.service
 	deb-systemd-invoke enable avahi-daemon
 	deb-systemd-invoke restart avahi-daemon
-	deb-systemd-invoke enable fallback-ap.timer
+
+	if [ "$(dpkg-query -W -f='${Version}' asl3-appliance-pc)" = "2.2.1-1.deb13" ]; then
+		deb-systemd-invoke disable fallback-ap.timer
+	fi
 
 	# Customize dphys-swapfile if its installed
 	if [ -f /etc/dphys-swapfile ]; then

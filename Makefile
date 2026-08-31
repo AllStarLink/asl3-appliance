@@ -3,7 +3,7 @@
 #
 SRCNAME 	= asl3-appliance
 PKGNAME 	= $(SRCNAME)
-RELVER 		= 2.2.0
+RELVER 		= 2.2.1
 DEBVER 		= 1
 RELPLAT 	?= deb$(shell lsb_release -rs 2> /dev/null)
 
@@ -22,7 +22,7 @@ BUILDABLES = \
 ifdef DESTDIR
 FULL_DESTDIR = $(shell readlink -f $(DESTDIR))
 else
-FULL_DESTDIR := 
+FULL_DESTDIR :=
 endif
 
 ROOT_FILES = LICENSE README.md
