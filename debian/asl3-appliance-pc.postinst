@@ -28,8 +28,8 @@ do_configure() {
 
 	if [ "$(dpkg-query -W -f='${Version}' asl3-appliance-pc)" = "2.2.1-1.deb13" ]; then
 		deb-systemd-invoke stop fallback-ap.timer
-		deb-systemd-invoke disable fallback-ap.stimer
-		nmcli connection delete asl-fallback-ap
+		deb-systemd-invoke disable fallback-ap.timer
+		nmcli connection delete asl-fallback-ap || true
 	fi
 
 	# Customize dphys-swapfile if its installed

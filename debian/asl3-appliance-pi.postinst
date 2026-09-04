@@ -29,7 +29,7 @@ do_configure() {
 	if [ "$(dpkg-query -W -f='${Version}' asl3-appliance-pi)" = "2.2.1-1.deb13" ]; then
 		deb-systemd-invoke stop fallback-ap.timer
 		deb-systemd-invoke disable fallback-ap.timer
-		nmcli connection delete asl-fallback-ap
+		nmcli connection delete asl-fallback-ap || true
 	fi
 
 
