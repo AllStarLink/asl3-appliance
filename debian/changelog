@@ -1,3 +1,9 @@
+asl3-appliance (2.2.2-1) stable; urgency=medium
+
+  * Fix bug in asl-enable-pi-serial (#8)
+
+ -- Helium <jason@mfamily.org>  Mon, 21 Sep 2026 16:59:50 -0400
+
 asl3-appliance (2.2.1-2) stable; urgency=medium
 
   * Fix postinst bugs
