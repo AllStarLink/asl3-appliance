@@ -126,32 +126,14 @@ seed_serial_hw() {
 		|| append_all "${UART_KEY}=${UART_VALUE}"
 }
 
-# Fallback used only when raspi-config is not installed
-fallback_serial_hw() {
-	rewrite "$CONFIG" awk -v key="$UART_KEY" -v value="$UART_VALUE" '
-		$0 ~ "^[[:space:]]*#?[[:space:]]*" key "=" { print key "=" value; next }
-		{ print }
-	'
-}
-
 #
 # Serial console off
 #
-if command -v raspi-config >/dev/null 2>&1; then
-	USE_RASPI_CONFIG=1
-else
-	USE_RASPI_CONFIG=0
-	msg "raspi-config not found; using built-in fallback"
-fi
-
 BACKUP_CONFIG="$(mktemp)" && BACKUP_CMDLINE="$(mktemp)" || die "mktemp failed"
 trap 'rm -f "$BACKUP_CONFIG" "$BACKUP_CMDLINE"' EXIT
 cp -p "$CONFIG" "$BACKUP_CONFIG" && cp -p "$CMDLINE" "$BACKUP_CMDLINE" \
 	|| die "unable to snapshot boot configuration"
-
-if [ "$USE_RASPI_CONFIG" -eq 1 ]; then
-	raspi-config nonint do_serial_cons 1 || die "raspi-config do_serial_cons failed"
-fi
+raspi-config nonint do_serial_cons 1 || die "raspi-config do_serial_cons failed"
 
 # raspi-config only strips "console=ttyAMA0,N " and "console=serial0,N "
 # (trailing space required); remove every UART console token wherever it is
@@ -164,7 +146,8 @@ rewrite "$CMDLINE" sed -E \
 # config.txt has no inline comments: "dtoverlay=disable-bt  # foo" is an
 # invalid overlay name and "[all]  # foo" an unknown section filter, and the
 # firmware silently ignores both. Strip trailing comments from section headers
-# and from the settings this script manages.
+# and from the settings this script manages. This is needed for versions of
+# asl-enable-pi-serial that was writing out invalid configurations.
 #
 rewrite "$CONFIG" sed -E \
 	-e 's/^[[:space:]]*(\[[^]#]*\])[[:space:]]*#.*$/\1/' \
@@ -175,11 +158,7 @@ rewrite "$CONFIG" sed -E \
 # UART hardware on
 #
 seed_serial_hw || die "unable to update $CONFIG"
-if [ "$USE_RASPI_CONFIG" -eq 1 ]; then
-	raspi-config nonint do_serial_hw 0 || die "raspi-config do_serial_hw failed"
-else
-	fallback_serial_hw || die "unable to update $CONFIG"
-fi
+raspi-config nonint do_serial_hw 0 || die "raspi-config do_serial_hw failed"
 
 #
 # Move Bluetooth off the PL011 (Pi 3/4 family)
