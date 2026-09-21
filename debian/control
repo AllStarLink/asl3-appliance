@@ -20,7 +20,7 @@ Description: Appliance customization for Debian-based ASL "appliances"
 
 Package: asl3-appliance-pi
 Architecture: all
-Depends: ${misc:Depends}, avahi-daemon, asl3-appliance
+Depends: ${misc:Depends}, avahi-daemon, asl3-appliance, raspi-config-core
 Conflicts: asl3-pi-appliance (<< 2.0.0), asl3-appliance-pc
 Description: Appliance customization for Debian-based ASL "appliances" - Pi addons
 

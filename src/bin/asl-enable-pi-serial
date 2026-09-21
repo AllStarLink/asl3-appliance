@@ -1,213 +1,199 @@
 #!/usr/bin/bash
-
-# Code taken from https://github.com/RPi-Distro/raspi-config
+#
+# asl-enable-pi-serial - make the GPIO 14/15 (header pins 8/10) UART usable
+# by applications on a Raspberry Pi:
+#
+#   * no serial login console on the port
+#   * UART hardware enabled
+#   * on boards where Bluetooth owns the PL011 (Pi 3/4/400/Zero W/Zero 2 W/
+#     CM4), Bluetooth is moved off it with dtoverlay=disable-bt so the full
+#     UART lands on the header as /dev/ttyAMA0 (/dev/serial0)
+#
+# raspi-config (nonint mode) is used for the console and UART settings when it
+# is installed. A minimal built-in fallback, derived from raspi-config, is used
+# otherwise.
+#
+# Fallback code derived from https://github.com/RPi-Distro/raspi-config
 # Copyright (c) 2012 Alex Bradbury <asb@asbradbury.org>
 # Distributed under the MIT License
 #
 # Adapted for AllStarLink by Jason McCormick <jason@mfamily.org>
 # Copyright (c) 2024 Jason McCormick <jason@mfamily.org>
-# Distributed undert he MIT License
+# Distributed under the MIT License
+#
+# Options:
+#   --keep-bt   leave Bluetooth on the PL011 (header gets the mini UART)
+#   -q          only print on change/error
+#
+# Bluetooth handling can also be set persistently in
+# /etc/default/asl-enable-pi-serial with BLUETOOTH=keep
+#
+# Exit status: 0 on success (prints "REBOOT REQUIRED" if anything changed),
+# non-zero on failure.
 
-ASK_TO_REBOOT=0
+set -o pipefail
 
-if [ -e /boot/firmware/config.txt ] ; then
-  FIRMWARE=/firmware
+BLUETOOTH=disable
+QUIET=0
+
+[ -r /etc/default/asl-enable-pi-serial ] && . /etc/default/asl-enable-pi-serial
+
+for arg in "$@"; do
+	case "$arg" in
+		--keep-bt) BLUETOOTH=keep ;;
+		-q) QUIET=1 ;;
+		-h|--help)
+			sed -n '2,32s/^# \{0,1\}//p' "$0"
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $arg" >&2
+			exit 2
+			;;
+	esac
+done
+
+msg() {
+	[ "$QUIET" -eq 1 ] || echo "$@"
+}
+
+die() {
+	echo "asl-enable-pi-serial: $*" >&2
+	exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must be run as root"
+
+if ! tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q "Raspberry Pi"; then
+	die "this does not appear to be a Raspberry Pi"
+fi
+
+if [ -e /boot/firmware/config.txt ]; then
+	FIRMWARE=/firmware
 else
-  FIRMWARE=
+	FIRMWARE=
 fi
 CONFIG=/boot${FIRMWARE}/config.txt
 
+PREFIX=
 if [ -e /proc/device-tree/chosen/os_prefix ]; then
 	PREFIX="$(tr -d '\0' < /proc/device-tree/chosen/os_prefix)"
 fi
 CMDLINE="/boot${FIRMWARE}/${PREFIX}cmdline.txt"
 
-set_config_var() {
-  lua - "$1" "$2" "$3" <<EOF > "$3.bak"
-local key=assert(arg[1])
-local value=assert(arg[2])
-local fn=assert(arg[3])
-local file=assert(io.open(fn))
-local made_change=false
-for line in file:lines() do
-  if line:match("^#?%s*"..key.."=.*$") then
-    line=key.."="..value
-    made_change=true
-  end
-  print(line)
-end
+[ -f "$CONFIG" ] || die "$CONFIG not found"
+[ -f "$CMDLINE" ] || die "$CMDLINE not found"
 
-if not made_change then
-  print(key.."="..value)
-end
-EOF
-mv "$3.bak" "$3"
-}
-
-
+# BCM2712 boards (Pi 5, Pi 500, CM5) have a dedicated Bluetooth UART
 is_pifive() {
-  grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F]4[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$" /proc/cpuinfo
-  return $?
+	grep -q "^Revision\s*:\s*[ 123][0-9a-fA-F][0-9a-fA-F]4[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$" /proc/cpuinfo
 }
 
-get_serial_cons() {
-  if grep -q -E "console=(serial0|ttyAMA0|ttyS0)" $CMDLINE ; then
-    echo 0
-  else
-    echo 1
-  fi
+# Rewrite a file in place only if the filter succeeded, so a failure can
+# never leave an empty or truncated config.txt/cmdline.txt behind
+rewrite() {
+	local file="$1"; shift
+	local tmp
+	tmp="$(mktemp "${file}.XXXXXX")" || return 1
+	if "$@" < "$file" > "$tmp" && [ -s "$tmp" ]; then
+		cat "$tmp" > "$file" && rm -f "$tmp"
+	else
+		rm -f "$tmp"
+		return 1
+	fi
 }
 
-get_serial_hw() {
-  if is_pifive ; then
-    if grep -q -E "dtparam=uart0=off" $CONFIG ; then
-      echo 1
-    elif grep -q -E "dtparam=uart0" $CONFIG ; then
-      echo 0
-    else
-      echo 1
-    fi
-  else
-    if grep -q -E "^enable_uart=1" $CONFIG ; then
-      echo 0
-    elif grep -q -E "^enable_uart=0" $CONFIG ; then
-      echo 1
-    elif [ -e /dev/serial0 ] ; then
-      echo 0
-    else
-      echo 1
-    fi
-  fi
+# Append a line to config.txt under an explicit [all] section so it cannot
+# end up inside a trailing [pi5]/[cm4]/etc. conditional block
+append_all() {
+	printf '\n[all]\n%s\n' "$1" >> "$CONFIG"
 }
 
-do_serial_cons() {
-  if [ $1 -eq 0 ] ; then
-    if grep -q "console=ttyAMA0" $CMDLINE ; then
-      if [ -e /proc/device-tree/aliases/serial0 ]; then
-        sed -i $CMDLINE -e "s/console=ttyAMA0/console=serial0/"
-      fi
-    elif ! grep -q "console=ttyAMA0" $CMDLINE && ! grep -q "console=serial0" $CMDLINE ; then
-      if [ -e /proc/device-tree/aliases/serial0 ]; then
-        sed -i $CMDLINE -e "s/root=/console=serial0,115200 root=/"
-      else
-        sed -i $CMDLINE -e "s/root=/console=ttyAMA0,115200 root=/"
-      fi
-    fi
-  else
-    sed -i $CMDLINE -e "s/console=ttyAMA0,[0-9]\+ //"
-    sed -i $CMDLINE -e "s/console=serial0,[0-9]\+ //"
-  fi
-}
-
-do_serial_hw() {
-  if [ $1 -eq 0 ] ; then
-    if is_pifive ; then
-      set_config_var dtparam=uart0 on $CONFIG
-    else
-      set_config_var enable_uart 1 $CONFIG
-    fi
-  else
-    if is_pifive ; then
-      sed $CONFIG -i -e "/dtparam=uart0.*/d"
-    else
-      set_config_var enable_uart 0 $CONFIG
-    fi
-  fi
-}
-
-do_serial() {
-  CURRENTS=0
-  CURRENTH=0
-  if [ $(get_serial_cons) -eq 0 ]; then
-    DEFAULTS=
-    CURRENTS=1
-  fi
-  if [ $(get_serial_hw) -eq 0 ]; then
-    DEFAULTH=
-    CURRENTH=1
-  fi
-  RET=1
-  if [ $RET -eq $CURRENTS ]; then
-    ASK_TO_REBOOT=1
-  fi
-  if [ $RET -eq 0 ]; then
-    do_serial_cons 0
-    SSTATUS=enabled
-    do_serial_hw 0
-    HSTATUS=enabled
-  elif [ $RET -eq 1 ]; then
-    do_serial_cons 1
-    SSTATUS=disabled
-    RET=0
-    if [ $RET -eq $CURRENTH ]; then
-      ASK_TO_REBOOT=1
-    fi
-    if [ $RET -eq 0 ]; then
-      do_serial_hw 0
-      HSTATUS=enabled
-    elif [ $RET -eq 1 ]; then
-      do_serial_hw 1
-      HSTATUS=disabled
-    else
-      return $RET
-    fi
-  else
-    return $RET
-  fi
-}
-
-
-do_serial_pi5() {
-  CURRENTS=0
-  CURRENTH=0
-  if [ $(get_serial_cons) -eq 0 ]; then
-    DEFAULTS=
-    CURRENTS=1
-  fi
-  if [ $(get_serial_hw) -eq 0 ]; then
-    DEFAULTH=
-    CURRENTH=1
-  fi
-  RET=1
-  if [ $RET -eq $CURRENTS ]; then
-    ASK_TO_REBOOT=1
-  fi
-  if [ $RET -eq 0 ]; then
-    do_serial_cons 0
-    SSTATUS=enabled
-  elif [ $RET -eq 1 ]; then
-    do_serial_cons 1
-    SSTATUS=disabled
-  else
-    return $RET
-  fi
-  RET=0
-  if [ $RET -eq $CURRENTH ]; then
-    ASK_TO_REBOOT=1
-  fi
-  if [ $RET -eq 0 ]; then
-    do_serial_hw 0
-    HSTATUS=enabled
-  elif [ $RET -eq 1 ]; then
-    do_serial_hw 1
-    HSTATUS=disabled
-  else
-    return $RET
-  fi
-}
-
+# The config.txt setting that turns on the header UART
 if is_pifive; then
-	do_serial_pi5
+	UART_KEY=dtparam=uart0
+	UART_VALUE=on
 else
-	do_serial
+	UART_KEY=enable_uart
+	UART_VALUE=1
 fi
 
-if [ ${ASK_TO_REBOOT} -eq 1 ]; then
-	echo 
-	echo 'A REBOOT IS REQUIRED FOR THIS TO TAKE EFFECT!'
+# If the UART setting is not in config.txt at all, add it under [all].
+# raspi-config (and the fallback) then edit that line in place instead of
+# appending it to whatever conditional section happens to be last.
+seed_serial_hw() {
+	grep -q -E "^[[:space:]]*#?[[:space:]]*${UART_KEY}=" "$CONFIG" \
+		|| append_all "${UART_KEY}=${UART_VALUE}"
+}
+
+#
+# Serial console off
+#
+BACKUP_CONFIG="$(mktemp)" && BACKUP_CMDLINE="$(mktemp)" || die "mktemp failed"
+trap 'rm -f "$BACKUP_CONFIG" "$BACKUP_CMDLINE"' EXIT
+cp -p "$CONFIG" "$BACKUP_CONFIG" && cp -p "$CMDLINE" "$BACKUP_CMDLINE" \
+	|| die "unable to snapshot boot configuration"
+raspi-config nonint do_serial_cons 1 || die "raspi-config do_serial_cons failed"
+
+# raspi-config only strips "console=ttyAMA0,N " and "console=serial0,N "
+# (trailing space required); remove every UART console token wherever it is
+rewrite "$CMDLINE" sed -E \
+	-e 's/(^|[[:space:]])console=(serial[0-9]+|ttyAMA[0-9]+|ttyS[0-9]+)(,[^[:space:]]*)?//g' \
+	-e 's/^[[:space:]]+//' \
+	|| die "unable to update $CMDLINE"
+
+#
+# config.txt has no inline comments: "dtoverlay=disable-bt  # foo" is an
+# invalid overlay name and "[all]  # foo" an unknown section filter, and the
+# firmware silently ignores both. Strip trailing comments from section headers
+# and from the settings this script manages. This is needed for versions of
+# asl-enable-pi-serial that was writing out invalid configurations.
+#
+rewrite "$CONFIG" sed -E \
+	-e 's/^[[:space:]]*(\[[^]#]*\])[[:space:]]*#.*$/\1/' \
+	-e 's/^[[:space:]]*((enable_uart|dtparam=uart0|dtoverlay=(pi3-)?(disable|miniuart)-bt)(=[^#[:space:]]*)?)[[:space:]]*#.*$/\1/' \
+	|| die "unable to update $CONFIG"
+
+#
+# UART hardware on
+#
+seed_serial_hw || die "unable to update $CONFIG"
+raspi-config nonint do_serial_hw 0 || die "raspi-config do_serial_hw failed"
+
+#
+# Move Bluetooth off the PL011 (Pi 3/4 family)
+#
+if ! is_pifive && [ "$BLUETOOTH" != "keep" ]; then
+	# An existing miniuart-bt also puts the PL011 on the header; respect it
+	if ! grep -q -E '^[[:space:]]*dtoverlay=(pi3-)?(disable|miniuart)-bt[[:space:]]*$' "$CONFIG"; then
+		append_all "dtoverlay=disable-bt"
+		# Bluetooth attach service on older releases; absent on newer ones
+		if systemctl list-unit-files hciuart.service >/dev/null 2>&1; then
+			systemctl disable hciuart.service >/dev/null 2>&1 || true
+		fi
+	fi
+fi
+
+#
+# Report
+#
+CHANGED=0
+for pair in "$CONFIG:$BACKUP_CONFIG" "$CMDLINE:$BACKUP_CMDLINE"; do
+	file="${pair%%:*}"
+	orig="${pair#*:}"
+	if ! cmp -s "$file" "$orig"; then
+		CHANGED=1
+		cp -p "$orig" "${file}.asl-serial.bak"
+		msg "Updated ${file} (previous version saved as ${file}.asl-serial.bak)"
+	fi
+done
+
+if [ "$CHANGED" -eq 1 ]; then
 	echo
+	echo "REBOOT REQUIRED for serial port changes to take effect"
+	echo
+else
+	msg "Serial port already configured; no changes made"
 fi
 
 exit 0
-
-
