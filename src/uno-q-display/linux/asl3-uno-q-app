@@ -1,0 +1,30 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+set -eu
+
+APP_NAME=asl3-node-display
+APP_ID=user:$APP_NAME
+SOURCE_DIR=/usr/share/asl3-appliance/uno-q-display/app
+MANAGED_DIR=/home/arduino/ArduinoApps/$APP_NAME
+
+model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)
+if [ "$model" != "Arduino UnoQ" ]; then
+	echo "asl3-uno-q-app: unsupported system: ${model:-unknown}" >&2
+	exit 1
+fi
+
+if [ -d "$MANAGED_DIR" ]; then
+	cp -a "$SOURCE_DIR/." "$MANAGED_DIR/"
+else
+	temporary_dir=$(mktemp -d)
+	trap 'rm -rf "$temporary_dir"' EXIT HUP INT TERM
+	cp -a "$SOURCE_DIR" "$temporary_dir/$APP_NAME"
+	(
+		cd "$temporary_dir"
+		python3 -m zipfile -c "$APP_NAME.zip" "$APP_NAME"
+	)
+	arduino-app-cli app import "$temporary_dir/$APP_NAME.zip"
+fi
+
+exec arduino-app-cli app restart "$APP_ID"
