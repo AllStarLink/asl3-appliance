@@ -1,3 +1,7 @@
+etc/avahi/services/*
+etc/default/fallback-ap*
+lib/systemd/system/fallback-ap*
+usr/libexec/asl3/fallback-ap*
 src/uno-q-display/app usr/share/asl3-appliance/uno-q-display
 src/uno-q-display/linux/asl3-uno-q-app usr/libexec/asl3
 src/uno-q-display/linux/asl3-uno-q-display usr/libexec/asl3
