@@ -5,19 +5,19 @@
 ROWS = 8
 COLUMNS = 13
 BRIGHT = 4
-DIM = 2
+DIM = 3
 UNAVAILABLE_PAGE_SECONDS = 2.0
 BRAND_SECONDS = 3.0
 SCROLL_STEP_SECONDS = 0.15
-GLYPH_WIDTH = 3
 CHAR_WIDTH = 4
+NARROW_CHAR_WIDTH = 2
 TEXT_TOP = 1
 
-# Each character occupies a 4x6 cell: 3x5 pixels plus one blank column and row.
-FONT_4X6 = {
-    " ": ("000", "000", "000", "000", "000"),
+# Letters and digits use 4x6 cells; spaces and colons use 2x6 cells.
+SCROLL_FONT = {
+    " ": ( "00",  "00",  "00",  "00",  "00"),
     ",": ("000", "000", "000", "010", "100"),
-    ":": ("000", "010", "000", "010", "000"),
+    ":": ( "00",  "10",  "00",  "10",  "00"),
     "0": ("010", "101", "101", "101", "010"),
     "1": ("010", "110", "010", "010", "111"),
     "2": ("110", "001", "010", "100", "111"),
@@ -99,8 +99,10 @@ def idle_sequence(primary: str, links: tuple[str, ...], elapsed: float) -> bytes
     node_text = f" Node:{primary} "
     link_text = f"Link:{','.join(links)} " if links else ""
     text = node_text + link_text
+    cell_widths = [NARROW_CHAR_WIDTH if character in " :" else CHAR_WIDTH for character in text]
+    brightness = BRIGHT if links else DIM
     # Stop once the trailing space is fully on screen, leaving the last digit visible.
-    scroll_steps = len(text) * CHAR_WIDTH - COLUMNS + 1
+    scroll_steps = sum(cell_widths) - COLUMNS + 1
     cycle_seconds = BRAND_SECONDS + scroll_steps * SCROLL_STEP_SECONDS
     position = elapsed % cycle_seconds
     if position < BRAND_SECONDS:
@@ -108,12 +110,14 @@ def idle_sequence(primary: str, links: tuple[str, ...], elapsed: float) -> bytes
 
     step = int((position - BRAND_SECONDS) / SCROLL_STEP_SECONDS)
     frame = [[0] * COLUMNS for _ in range(ROWS)]
-    for index, character in enumerate(text):
-        brightness = BRIGHT if index < len(node_text) else DIM
-        start_x = index * CHAR_WIDTH - step
-        if start_x >= COLUMNS or start_x + GLYPH_WIDTH <= 0:
+    cursor_x = -step
+    for character, cell_width in zip(text, cell_widths):
+        glyph = SCROLL_FONT[character]
+        start_x = cursor_x
+        cursor_x += cell_width
+        if start_x >= COLUMNS or start_x + len(glyph[0]) <= 0:
             continue
-        for y, row in enumerate(FONT_4X6[character], start=TEXT_TOP):
+        for y, row in enumerate(glyph, start=TEXT_TOP):
             for offset, value in enumerate(row):
                 x = start_x + offset
                 if value == "1" and 0 <= x < COLUMNS:

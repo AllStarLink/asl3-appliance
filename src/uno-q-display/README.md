@@ -14,15 +14,16 @@ AMI credentials from `/etc/asterisk/manager.conf` (including its configured
 includes), monitors app_rpt events, builds complete 8x13 frames, and sends them
 to the sketch. While idle, it holds `ASL³` for three seconds and then scrolls
 ` Node:<number> `, followed by `Link:<number>[,<number>...] ` when linked.
-Scrolling advances one column every 150 ms; node text uses brightness 4 and
-link text uses brightness 2. The leading space and `Node` are visible as soon
-as scrolling starts; the scroll restarts after the final digit and trailing
-space are visible. RX and TX status interrupt the scroll and the
-idle sequence restarts when activity ends. When AMI is unavailable, the
+Scrolling advances one column every 150 ms. `ASL³` stays at brightness 4; the
+scrolling text uses brightness 2 with no links and brightness 4 when linked.
+Spaces and colons occupy two columns; other characters occupy four. The leading
+space and `Node` are visible as soon as scrolling starts; the scroll restarts
+after the final digit and trailing space are visible. RX and TX status interrupt
+the scroll; the idle sequence restarts when activity ends. When AMI is unavailable, the
 display alternates `ASL³` and a broken-line symbol while retrying; the service
 does not need Asterisk to be running first.
 
-The Linux renderer uses a small project-local 4x6-cell font so it can interrupt
+The Linux renderer uses a small project-local font so it can interrupt
 the scroll for RX/TX and preserve the selected brightness levels. Its glyphs
 should be compared on the matrix with the separate ArduinoGraphics font test.
 

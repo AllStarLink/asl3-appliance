@@ -9,7 +9,7 @@ constexpr size_t kRows = 8;
 constexpr size_t kColumns = 13;
 constexpr size_t kFrameSize = kRows * kColumns;
 constexpr uint8_t BRIGHT = 4;
-constexpr uint8_t DIM = 2;
+constexpr uint8_t DIM = 3;
 constexpr uint8_t OFF = 0;
 constexpr uint8_t LIT = BRIGHT;
 static_assert(DIM < BRIGHT, "dim level must be lower than normal brightness");
