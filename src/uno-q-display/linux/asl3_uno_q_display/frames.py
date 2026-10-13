@@ -4,21 +4,38 @@
 
 ROWS = 8
 COLUMNS = 13
-BRIGHT = 6
+BRIGHT = 4
 DIM = 2
 UNAVAILABLE_PAGE_SECONDS = 2.0
+BRAND_SECONDS = 3.0
+SCROLL_STEP_SECONDS = 0.15
+GLYPH_WIDTH = 3
+CHAR_WIDTH = 4
+TEXT_TOP = 1
 
-FONT_3X3 = {
-    "0": ("111", "101", "111"),
-    "1": ("010", "010", "010"),
-    "2": ("110", "010", "011"),
-    "3": ("110", "011", "110"),
-    "4": ("101", "111", "001"),
-    "5": ("111", "110", "011"),
-    "6": ("100", "111", "111"),
-    "7": ("111", "001", "001"),
-    "8": ("111", "111", "111"),
-    "9": ("111", "111", "001"),
+# Each character occupies a 4x6 cell: 3x5 pixels plus one blank column and row.
+FONT_4X6 = {
+    " ": ("000", "000", "000", "000", "000"),
+    ",": ("000", "000", "000", "010", "100"),
+    ":": ("000", "010", "000", "010", "000"),
+    "0": ("010", "101", "101", "101", "010"),
+    "1": ("010", "110", "010", "010", "111"),
+    "2": ("110", "001", "010", "100", "111"),
+    "3": ("110", "001", "010", "001", "110"),
+    "4": ("101", "101", "111", "001", "001"),
+    "5": ("111", "100", "110", "001", "110"),
+    "6": ("011", "100", "110", "101", "010"),
+    "7": ("111", "001", "010", "010", "010"),
+    "8": ("010", "101", "010", "101", "010"),
+    "9": ("010", "101", "011", "001", "110"),
+    "L": ("100", "100", "100", "100", "111"),
+    "N": ("101", "111", "111", "111", "101"),
+    "d": ("001", "011", "101", "101", "011"),
+    "e": ("000", "010", "111", "100", "011"),
+    "i": ("010", "000", "010", "010", "010"),
+    "k": ("100", "101", "110", "101", "101"),
+    "n": ("000", "110", "101", "101", "101"),
+    "o": ("000", "010", "101", "101", "010"),
 }
 
 def asl3() -> bytes:
@@ -74,15 +91,34 @@ def unavailable_sequence(elapsed: float) -> bytes:
 
 
 def idle_sequence(primary: str, links: tuple[str, ...], elapsed: float) -> bytes:
-    """Select the current branding, primary-node, or linked-node page."""
-    pages = [(1.0, asl3()), (2.0, node_number(primary))]
-    pages.extend((2.0, node_number(link, DIM, index)) for index, link in enumerate(links, 1))
-    position = elapsed % sum(duration for duration, _frame in pages)
-    for duration, frame in pages:
-        if position < duration:
-            return frame
-        position -= duration
-    return pages[0][1]
+    """Hold ASL³, then scroll the local node and any linked nodes."""
+    numbers = (primary, *links)
+    if any(not number.isascii() or not number.isdigit() for number in numbers):
+        raise ValueError("node numbers must contain only digits")
+
+    node_text = f" Node:{primary} "
+    link_text = f"Link:{','.join(links)} " if links else ""
+    text = node_text + link_text
+    # Stop once the trailing space is fully on screen, leaving the last digit visible.
+    scroll_steps = len(text) * CHAR_WIDTH - COLUMNS + 1
+    cycle_seconds = BRAND_SECONDS + scroll_steps * SCROLL_STEP_SECONDS
+    position = elapsed % cycle_seconds
+    if position < BRAND_SECONDS:
+        return asl3()
+
+    step = int((position - BRAND_SECONDS) / SCROLL_STEP_SECONDS)
+    frame = [[0] * COLUMNS for _ in range(ROWS)]
+    for index, character in enumerate(text):
+        brightness = BRIGHT if index < len(node_text) else DIM
+        start_x = index * CHAR_WIDTH - step
+        if start_x >= COLUMNS or start_x + GLYPH_WIDTH <= 0:
+            continue
+        for y, row in enumerate(FONT_4X6[character], start=TEXT_TOP):
+            for offset, value in enumerate(row):
+                x = start_x + offset
+                if value == "1" and 0 <= x < COLUMNS:
+                    frame[y][x] = brightness
+    return bytes(pixel for row in frame for pixel in row)
 
 
 def _status_label(first: str, down: bool) -> bytes:
@@ -115,31 +151,4 @@ def _centered_icon(rows: tuple[str, ...]) -> bytes:
         for offset, value in enumerate(row):
             if value == "1":
                 frame[y][start_x + offset] = BRIGHT
-    return bytes(pixel for row in frame for pixel in row)
-
-
-def node_number(number: str, brightness: int = BRIGHT, indicator_count: int = 0) -> bytes:
-    """Render a node number as two stable rows of up to three digits."""
-    if not number.isdigit() or not 1 <= len(number) <= 6:
-        raise ValueError("node number must contain one to six digits")
-    if not 1 <= brightness <= BRIGHT:
-        raise ValueError(f"brightness must be between 1 and {BRIGHT}")
-    if indicator_count < 0:
-        raise ValueError("indicator count cannot be negative")
-
-    frame = [[0] * COLUMNS for _ in range(ROWS)]
-
-    def draw_digits(digits: str, start_x: int, start_y: int) -> None:
-        for index, character in enumerate(digits):
-            for y, row in enumerate(FONT_3X3[character], start=start_y):
-                for offset, value in enumerate(row):
-                    if value == "1":
-                        frame[y][start_x + index * 4 + offset] = brightness
-
-    draw_digits(number[:3], start_x=0, start_y=0)
-    if len(number) > 3:
-        draw_digits(number[3:], start_x=2, start_y=4)
-
-    for x in range(min(indicator_count, COLUMNS)):
-        frame[ROWS - 1][x] = brightness
     return bytes(pixel for row in frame for pixel in row)

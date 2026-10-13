@@ -92,13 +92,27 @@ def run_session(stop: threading.Event, on_connected=None) -> None:
     reader = threading.Thread(target=read_events, name="ami-events", daemon=True)
     reader.start()
     LOG.info("displaying primary node %s", state.primary)
-    start = time.monotonic()
+    idle_started = time.monotonic()
+    previous_active = False
+    previous_content = state.snapshot()[:2]
     last_frame = None
     try:
         with BridgeClient() as bridge:
             while not stop.is_set() and not disconnected.is_set():
                 primary, links, rx, tx = state.snapshot()
-                frame = receive() if rx else transmit() if tx else idle_sequence(primary, links, time.monotonic() - start)
+                active = rx or tx
+                content = primary, links
+                now = time.monotonic()
+                if (previous_active and not active) or content != previous_content:
+                    idle_started = now
+                previous_active = active
+                previous_content = content
+                if rx:
+                    frame = receive()
+                elif tx:
+                    frame = transmit()
+                else:
+                    frame = idle_sequence(primary, links, now - idle_started)
                 if frame != last_frame:
                     bridge.call("draw", frame)
                     last_frame = frame

@@ -8,6 +8,11 @@ namespace {
 constexpr size_t kRows = 8;
 constexpr size_t kColumns = 13;
 constexpr size_t kFrameSize = kRows * kColumns;
+constexpr uint8_t BRIGHT = 4;
+constexpr uint8_t DIM = 2;
+constexpr uint8_t OFF = 0;
+constexpr uint8_t LIT = BRIGHT;
+static_assert(DIM < BRIGHT, "dim level must be lower than normal brightness");
 
 Arduino_LED_Matrix matrix;
 
@@ -15,14 +20,14 @@ Arduino_LED_Matrix matrix;
 // this frame when it has connected to the Arduino Router and obtained node
 // state from Asterisk.
 uint8_t frame[kFrameSize] = {
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 6, 0, 0, 0, 6, 6, 0, 6, 0, 6, 6, 0,
-	6, 0, 6, 0, 6, 0, 0, 0, 6, 0, 0, 6, 0,
-	6, 6, 6, 0, 0, 6, 0, 0, 6, 0, 6, 6, 0,
-	6, 0, 6, 0, 0, 0, 6, 0, 6, 0, 0, 0, 0,
-	6, 0, 6, 0, 6, 6, 0, 0, 6, 6, 6, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF,
+	OFF, LIT, OFF, OFF, OFF, LIT, LIT, OFF, LIT, OFF, LIT, LIT, OFF,
+	LIT, OFF, LIT, OFF, LIT, OFF, OFF, OFF, LIT, OFF, OFF, LIT, OFF,
+	LIT, LIT, LIT, OFF, OFF, LIT, OFF, OFF, LIT, OFF, LIT, LIT, OFF,
+	LIT, OFF, LIT, OFF, OFF, OFF, LIT, OFF, LIT, OFF, OFF, OFF, OFF,
+	LIT, OFF, LIT, OFF, LIT, LIT, OFF, OFF, LIT, LIT, LIT, OFF, OFF,
+	OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF,
+	OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF, OFF,
 };
 
 void draw(std::vector<uint8_t> new_frame)
