@@ -1,5 +1,5 @@
 #!/usr/bin/bash -e
-# postinst script for allmon3
+# postinst script for asl3-appliance-pc
 #
 # see: dh_installdeb(1)
 
