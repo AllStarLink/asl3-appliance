@@ -13,7 +13,8 @@ The Linux service does the stateful work.  It runs as `asterisk`, reads existing
 AMI credentials from `/etc/asterisk/manager.conf` (including its configured
 includes), monitors app_rpt events, builds complete 8x13 frames, and sends them
 to the sketch. While idle, it holds `ASL³` for three seconds and then scrolls
-` Node:<number> `, followed by `Link:<number>[,<number>...] ` when linked.
+` Node:<number> `, followed by `Link:<number>[,<number>...] ` for directly
+connected nodes.
 Scrolling advances one column every 150 ms. `ASL³` stays at brightness 4; the
 scrolling text uses brightness 2 with no links and brightness 4 when linked.
 Spaces and colons occupy two columns; other characters occupy four. The leading

@@ -167,7 +167,10 @@ class AMIClient:
             if ":" not in line:
                 continue
             key, value = line.split(":", 1)
-            message[key.strip()] = value.strip()
+            key, value = key.strip(), value.strip()
+            if key == "Var" and value.startswith("RPT_ALINKS="):
+                message["RPT_ALINKS"] = value.partition("=")[2]
+            message[key] = value
 
     def send_action(self, headers: dict[str, str]) -> None:
         if self._socket is None:

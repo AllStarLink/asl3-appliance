@@ -17,6 +17,14 @@ from .frames import idle_sequence, receive, transmit, unavailable_sequence
 LOG = logging.getLogger("asl3-uno-q-display")
 
 
+def adjacent_nodes(value: str) -> list[str]:
+    return [
+        match.group(1)
+        for item in value.split(",")[1:]
+        if (match := re.fullmatch(r"([0-9]+)[TRC][UK]", item))
+    ]
+
+
 @dataclass
 class NodeState:
     primary: str
@@ -41,8 +49,8 @@ class NodeState:
                 self.tx = value == "1"
             elif name == "RPT_ETXKEYED":
                 self.etx = value == "1"
-            elif name == "RPT_LINKS":
-                self.links = [digits for item in value.split(",")[1:] if (digits := "".join(re.findall(r"\d", item)))]
+            elif name == "RPT_ALINKS":
+                self.links = adjacent_nodes(value)
 
 
 def initialize(client: AMIClient) -> NodeState:
@@ -53,7 +61,7 @@ def initialize(client: AMIClient) -> NodeState:
     response = client.action("RptStatus", Command="XStat", Node=nodes[0])
     if response.get("Response", "").lower() != "success":
         raise AMIError(response.get("Message", "XStat failed"))
-    return NodeState(nodes[0], re.findall(r"\d+", response.get("LinkedNodes", "")))
+    return NodeState(nodes[0], adjacent_nodes(response.get("RPT_ALINKS", "")))
 
 
 def show_unavailable(stop: threading.Event, started: float, duration: float = 3.0) -> None:
