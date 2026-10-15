@@ -24,13 +24,33 @@ fi
 do_configure() {
 
 	#Apache Management
-    if [ -e /usr/sbin/apache2 ]; then
-        apache2_invoke enmod ssl || exit $?
-        apache2_invoke ensite default-ssl || exit $?
+	if [ -e /usr/sbin/apache2 ]; then
+		apache2_invoke enmod ssl || exit $?
+		apache2_invoke ensite default-ssl || exit $?
 		apache2_invoke enmod headers || exit $?
 		apache2_invoke enconf nocache || exit $?
-    fi
+	fi
 	/usr/share/asl3-appliance/apache2/apply-apache-conf
+
+	# Check for Firewalld IPv6 reverse-path filter support, which is missing
+	# from some kernels, including the Arduino UNO Q kernel.
+	NFT_PROBE_TABLE="asl3_rpfilter_probe_$$"
+	if ! nft --check --file - >/dev/null 2>&1 <<EOF
+add table inet ${NFT_PROBE_TABLE}
+add chain inet ${NFT_PROBE_TABLE} probe
+add rule inet ${NFT_PROBE_TABLE} probe fib saddr type local accept
+EOF
+	then
+		if grep -qE '^[[:space:]]*IPv6_rpfilter=no[[:space:]]*$' /etc/firewalld/firewalld.conf; then
+			:
+		elif grep -qE '^[[:space:]]*IPv6_rpfilter=' /etc/firewalld/firewalld.conf; then
+			sed -i -E 's/^[[:space:]]*IPv6_rpfilter=.*/IPv6_rpfilter=no/' /etc/firewalld/firewalld.conf
+			echo "NOTICE: disabled Firewalld IPv6 reverse-path filtering; unsupported by this kernel"
+		else
+			printf '\nIPv6_rpfilter=no\n' >> /etc/firewalld/firewalld.conf
+			echo "NOTICE: disabled Firewalld IPv6 reverse-path filtering; unsupported by this kernel"
+		fi
+	fi
 
 	# Services to start on boot
 	deb-systemd-invoke enable apache2
@@ -81,18 +101,17 @@ EOF
 
 case "$1" in
     configure)
-		do_configure
-    ;;
-		triggered)
-		/usr/share/cockpit/branding/debian-AllStarLink/fix-os-release
+	do_configure
 	;;
-	    abort-upgrade|abort-remove|abort-deconfigure)
-    ;;
-
+    triggered)
+	/usr/share/cockpit/branding/debian-AllStarLink/fix-os-release
+	;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+	;;
     *)
-        echo "postinst called with unknown argument \`$1'" >&2
-        exit 1
-    ;;
+	echo "postinst called with unknown argument \`$1'" >&2
+	exit 1
+	;;
 esac
 
 # dh_installdeb will replace this with shell code automatically
@@ -101,4 +120,3 @@ esac
 #DEBHELPER#
 
 exit 0
-

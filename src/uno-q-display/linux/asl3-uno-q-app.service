@@ -1,0 +1,16 @@
+[Unit]
+Description=Provision the ASL3 Arduino UNO Q matrix sketch
+After=arduino-router.service docker.service
+Before=asl3-uno-q-display.service
+
+[Service]
+Type=oneshot
+User=arduino
+Group=arduino
+Environment=HOME=/home/arduino
+ExecStart=/usr/libexec/asl3/asl3-uno-q-app
+ExecStop=/usr/bin/arduino-app-cli app stop user:asl3-node-display
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
