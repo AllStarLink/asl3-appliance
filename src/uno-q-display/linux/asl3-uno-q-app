@@ -8,9 +8,8 @@ APP_ID=user:$APP_NAME
 SOURCE_DIR=/usr/share/asl3-appliance/uno-q-display/app
 MANAGED_DIR=/home/arduino/ArduinoApps/$APP_NAME
 
-model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)
-if [ "$model" != "Arduino UnoQ" ]; then
-	echo "asl3-uno-q-app: unsupported system: ${model:-unknown}" >&2
+if ! tr '\0' '\n' < /proc/device-tree/compatible 2>/dev/null | grep -Fxq 'arduino,imola'; then
+	echo "asl3-uno-q-app: unsupported system (expected Arduino UNO Q)" >&2
 	exit 1
 fi
 

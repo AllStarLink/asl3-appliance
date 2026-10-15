@@ -1,5 +1,3 @@
-UNO_Q_MODEL := Arduino UnoQ
-
 .PHONY: help check-uno-q deploy status logs
 
 help:
@@ -9,9 +7,8 @@ help:
 	@echo "  make logs    Show display service logs"
 
 check-uno-q:
-	@model="$$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)"; \
-	if [ "$$model" != "$(UNO_Q_MODEL)" ]; then \
-		echo "error: expected '$(UNO_Q_MODEL)', found '$${model:-unknown}'" >&2; \
+	@if ! tr '\0' '\n' < /proc/device-tree/compatible 2>/dev/null | grep -Fxq 'arduino,imola'; then \
+		echo "error: expected an Arduino UNO Q" >&2; \
 		exit 1; \
 	fi
 

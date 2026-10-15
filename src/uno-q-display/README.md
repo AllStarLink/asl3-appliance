@@ -28,6 +28,11 @@ The Linux renderer uses a small project-local font so it can interrupt
 the scroll for RX/TX and preserve the selected brightness levels. Its glyphs
 should be compared on the matrix with the separate ArduinoGraphics font test.
 
+The sketch uses the installed UNO Q Zephyr platform's library dependencies.
+Arduino CLI 1.5.0 or newer resolves Arduino_RouterBridge and its dependencies
+from that platform when the sketch is built, allowing newer library releases
+without changing this package.
+
 ## Updating an installed display
 
 Run `make deploy` from this directory on the UNO Q for both first installation

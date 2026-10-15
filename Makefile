@@ -69,9 +69,10 @@ debprep:	debclean
 		ln -s $(PKGNAME)-$(RELVER).tar.gz $(PKGNAME)_$(RELVER).orig.tar.gz )
 
 debclean:
-	rm -f ../$(PKGNAME)_$(RELVER)* ../$(PKGNAME)-p[ci]_$(RELVER)*
+	rm -f ../$(PKGNAME)_$(RELVER)* ../$(PKGNAME)-pc_$(RELVER)* ../$(PKGNAME)-pi_$(RELVER)* \
+		../$(PKGNAME)-uno-q_$(RELVER)* ../asl3-pi-appliance_$(RELVER)*
 	rm -f ../$(PKGNAME)-$(RELVER)*
-	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi debian/asl3-pi-appliance
+	rm -rf debian/$(PKGNAME) debian/$(PKGNAME)-pc debian/$(PKGNAME)-pi debian/$(PKGNAME)-uno-q debian/asl3-pi-appliance
 	rm -f debian/files
 	rm -rf debian/.debhelper/
 	rm -f debian/debhelper-build-stamp
