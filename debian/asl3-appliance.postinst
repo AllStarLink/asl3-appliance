@@ -77,6 +77,21 @@ EOF
 	# Customize /etc/os-release
 	/usr/share/cockpit/branding/debian-AllStarLink/fix-os-release
 
+	# Edit /etc/adduser.conf for asl-web-ui and ensure all gid=users
+	# are added to asl-web-ui
+	groupadd -fr asl-web-ui
+	perl -pi -e 's/^#EXTRA_GROUPS="users"/EXTRA_GROUPS="users asl-web-ui"/g; s/^#ADD_EXTRA_GROUPS=0/ADD_EXTRA_GROUPS=1/g;' /etc/adduser.conf
+	group_entry=$(getent group users) || exit 1
+	gid=$(echo "$group_entry" | cut -d: -f3)
+	{
+		getent passwd | awk -F: -v gid="$gid" '$4 == gid {print $1}'
+		echo "$group_entry" | cut -d: -f4 | tr ',' '\n'
+	} | sort -u | while IFS= read -r user; do
+		if [ -n "$user" ]; then
+			usermod -aG asl-web-ui "$user"
+		fi
+	done
+
 }
 
 case "$1" in
