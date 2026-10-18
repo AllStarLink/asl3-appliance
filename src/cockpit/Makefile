@@ -9,6 +9,7 @@ ETC_FILES = $(wildcard etc/*.conf)
 ETC_INSTALLABLES = $(patsubst etc/%, $(DESTDIR)$(cockpit_etc)/%, $(ETC_FILES))
 
 BRAND_FILES = \
+	debian-AllStarLink/aslbg.webp \
 	debian-AllStarLink/branding.css \
 	debian-AllStarLink/favicon.ico \
 	debian-AllStarLink/logo.png
