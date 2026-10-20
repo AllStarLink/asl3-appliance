@@ -2,6 +2,7 @@ etc/firewalld/zones/*
 etc/firewalld/services/*
 etc/cockpit/cockpit.conf
 etc/apache2/conf-available/nocache.conf
+etc/apache2/sites-available/*
 etc/gnutls/config
 var/www/html/*
 var/www/html/js/*
@@ -10,6 +11,4 @@ var/www/html/css/*
 usr/share/cockpit/branding/debian-AllStarLink/*
 usr/share/doc/asl3-appliance/*
 usr/share/doc/asl3-appliance/*
-usr/share/asl3-appliance/*
-usr/share/asl3-appliance/apache2/*
 
