@@ -12,7 +12,9 @@ Arduino App CLI can provision and supervise that sketch.
 The Linux service does the stateful work.  It runs as `asterisk`, reads existing
 AMI credentials from `/etc/asterisk/manager.conf` (including its configured
 includes), monitors app_rpt events, builds complete 8x13 frames, and sends them
-to the sketch. While idle, it holds `ASL³` for three seconds and then scrolls
+to the sketch. The display service also uses the `arduino-router` group to
+connect to the Arduino Router socket. While idle, it holds `ASL³` for three
+seconds and then scrolls
 ` Node:<number> `, followed by `Link:<number>[,<number>...] ` for directly
 connected nodes.
 Scrolling advances one column every 150 ms. `ASL³` stays at brightness 4; the

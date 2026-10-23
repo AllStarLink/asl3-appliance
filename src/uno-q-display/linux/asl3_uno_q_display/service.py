@@ -84,8 +84,6 @@ def run_session(stop: threading.Event, on_connected=None) -> None:
     ami = AMIClient(load_ami_config(), timeout=5)
     ami.connect(events=True)
     state = initialize(ami)
-    if on_connected is not None:
-        on_connected()
     ami.set_timeout(None)
     disconnected = threading.Event()
 
@@ -123,6 +121,8 @@ def run_session(stop: threading.Event, on_connected=None) -> None:
                     frame = idle_sequence(primary, links, now - idle_started)
                 if frame != last_frame:
                     bridge.call("draw", frame)
+                    if last_frame is None and on_connected is not None:
+                        on_connected()
                     last_frame = frame
                 stop.wait(0.05)
     finally:
@@ -138,21 +138,21 @@ def main() -> None:
     signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.set())
     signal.signal(signal.SIGINT, lambda _signum, _frame: stop.set())
     unavailable_since = time.monotonic()
-    ami_unavailable = False
+    connection_unavailable = False
 
     def connected() -> None:
-        nonlocal ami_unavailable
-        if ami_unavailable:
-            LOG.info("AMI connectivity restored")
-            ami_unavailable = False
+        nonlocal connection_unavailable
+        if connection_unavailable:
+            LOG.info("Display connectivity restored")
+            connection_unavailable = False
 
     while not stop.is_set():
         try:
             run_session(stop, connected)
         except (AMIError, BridgeError, ConnectionError, OSError, ValueError) as error:
-            if not ami_unavailable:
-                LOG.warning("AMI unavailable: %s; retrying silently", error)
-                ami_unavailable = True
+            if not connection_unavailable:
+                LOG.warning("Display connection unavailable: %s; retrying silently", error)
+                connection_unavailable = True
                 unavailable_since = time.monotonic()
             show_unavailable(stop, unavailable_since)
 
