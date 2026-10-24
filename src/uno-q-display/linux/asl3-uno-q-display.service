@@ -7,6 +7,7 @@ After=asterisk.service asl3-uno-q-app.service
 Type=simple
 User=asterisk
 Group=asterisk
+SupplementaryGroups=arduino-router
 ExecStart=/usr/libexec/asl3/asl3-uno-q-display
 Restart=on-failure
 RestartSec=3
