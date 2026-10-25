@@ -24,13 +24,43 @@ fi
 do_configure() {
 
 	#Apache Management
-	if [ -e /usr/sbin/apache2 ]; then
-		apache2_invoke enmod ssl || exit $?
-		apache2_invoke ensite default-ssl || exit $?
-		apache2_invoke enmod headers || exit $?
+
+# Modules are only reloaded here (apache2_invoke restarts for each one
+	# otherwise, which together with other packages' restarts can hit
+	# systemd's start limit); apache2 is restarted below.
+    if [ -e /usr/sbin/apache2 ]; then
+        apache2_invoke enmod ssl reload || exit $?
+		apache2_invoke enmod headers reload || exit $?
+		apache2_invoke enmod rewrite reload || exit $?
 		apache2_invoke enconf nocache || exit $?
-	fi
-	/usr/share/asl3-appliance/apache2/apply-apache-conf
+
+		# The appliance's own sites replace Debian's default ones, the first
+		# time they are enabled (a2query: 0 enabled, 32 disabled by the
+		# admin). apache2_invoke cannot disable a site in configure. An older
+		# appliance rewrote Debian's sites in place; they stay disabled as
+		# they are.
+		a2query -s 000-asl3-appliance > /dev/null 2>&1 && rc=0 || rc=$?
+		if [ "$rc" -ne 0 ] && [ "$rc" -ne 32 ]; then
+			a2dissite -q 000-default default-ssl || true
+		fi
+		apache2_invoke ensite 000-asl3-appliance || exit $?
+		apache2_invoke ensite 000-asl3-appliance-ssl || exit $?
+    fi
+
+	# asl-web-ui: the appliance owns Apache's sites, so asl-web-ui only gives
+	# the HTTPS site its Let's Encrypt certificate (through
+	# /etc/asl-web-ui/apache-tls.conf). Generated rather than a conffile so
+	# that removing the appliance hands the sites back to asl-web-ui.
+	mkdir -p /etc/asl-web-ui/conf.d
+	cat - > /etc/asl-web-ui/conf.d/50-asl3-appliance.ini <<EOF
+; Written by asl3-appliance; changes made here are replaced. To override,
+; put your settings in a later file, e.g. /etc/asl-web-ui/conf.d/90-local.ini
+[https]
+apache_vhosts = external
+EOF
+	# Move a certificate from asl-web-ui's own site into the appliance's.
+	/usr/libexec/asl-web-ui/asl-web-ui-https-sync || \
+		echo "WARNING: asl-web-ui-https-sync failed; check asl-web-ui's HTTPS page"
 
 	# Check for Firewalld IPv6 reverse-path filter support, which is missing
 	# from some kernels, including the Arduino UNO Q kernel.
