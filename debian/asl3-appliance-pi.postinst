@@ -1,5 +1,5 @@
 #!/usr/bin/bash -e
-# postinst script for allmon3
+# postinst script for asl3-appliance-pi
 #
 # see: dh_installdeb(1)
 
@@ -31,7 +31,6 @@ do_configure() {
 		deb-systemd-invoke disable fallback-ap.timer
 		nmcli connection delete asl-fallback-ap || true
 	fi
-
 
 	# Customize dphys-swapfile if its installed
 	if [ -f /etc/dphys-swapfile ]; then
