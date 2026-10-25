@@ -1,6 +1,6 @@
 prefix ?= /usr
 data_dir ?= $(prefix)/share
-WEBROOT ?= $(DESTDIR)/var/www/html
+WEBROOT ?= $(DESTDIR)$(data_dir)/asl3-appliance/web
 CSS_DIR = css
 FONT_DIR = fonts
 IMG_DIR = img

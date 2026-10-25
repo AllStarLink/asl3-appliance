@@ -4,11 +4,11 @@ etc/cockpit/cockpit.conf
 etc/apache2/conf-available/nocache.conf
 etc/apache2/sites-available/*
 etc/gnutls/config
-var/www/html/*
-var/www/html/js/*
-var/www/html/img/*
-var/www/html/css/*
-var/www/html/fonts/*
+usr/share/asl3-appliance/web/*
+usr/share/asl3-appliance/web/js/*
+usr/share/asl3-appliance/web/img/*
+usr/share/asl3-appliance/web/css/*
+usr/share/asl3-appliance/web/fonts/*
 usr/share/cockpit/branding/debian-AllStarLink/*
 usr/share/doc/asl3-appliance/*
 usr/share/doc/asl3-appliance/*
