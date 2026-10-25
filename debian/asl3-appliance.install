@@ -8,6 +8,7 @@ var/www/html/*
 var/www/html/js/*
 var/www/html/img/*
 var/www/html/css/*
+var/www/html/fonts/*
 usr/share/cockpit/branding/debian-AllStarLink/*
 usr/share/doc/asl3-appliance/*
 usr/share/doc/asl3-appliance/*

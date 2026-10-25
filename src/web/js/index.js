@@ -6,5 +6,7 @@ window.addEventListener('load', function() {
     const allmon3Link = this.document.getElementById('allmon3-link');
     allmon3Link.href = `https://${thisHostname}/allmon3/`;
     allmon3Link.target = '_blank';
+    const aslwebuiLink = this.document.getElementById('aslwebui-link');
+    aslwebuiLink.href = `https://${thisHostname}/asl-web-ui/`;
     this.document.getElementById('node-host').innerHTML = thisHostname;
 })

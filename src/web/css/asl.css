@@ -1,0 +1,108 @@
+/* AllStarLink appliance pages on PatternFly 6. Like asl-web-ui, the page
+   follows the browser's light/dark preference (js/theme.js); unlike it, the
+   top bar keeps the AllStarLink green, and PatternFly's blue brand color is
+   replaced with greens from the same family. */
+
+:root {
+  --asl-green-top: #73b51f;
+  --asl-green-bottom: #5c9118;
+
+  /* Darker than the masthead green so buttons and links keep 4.5:1 on white */
+  --asl-brand: #4a7612;
+  --asl-brand-hover: #3e6310;
+}
+
+:root.pf-v6-theme-dark {
+  --asl-brand: #9fd35a;
+  --asl-brand-hover: #b3dd7a;
+}
+
+:root, :root.pf-v6-theme-dark {
+  --pf-t--global--color--brand--default: var(--asl-brand);
+  --pf-t--global--color--brand--hover: var(--asl-brand-hover);
+  --pf-t--global--color--brand--clicked: var(--asl-brand-hover);
+  --pf-t--global--text--color--brand--default: var(--asl-brand);
+  --pf-t--global--text--color--brand--hover: var(--asl-brand-hover);
+  --pf-t--global--text--color--brand--clicked: var(--asl-brand-hover);
+  --pf-t--global--icon--color--brand--default: var(--asl-brand);
+  --pf-t--global--icon--color--brand--hover: var(--asl-brand-hover);
+  --pf-t--global--icon--color--brand--clicked: var(--asl-brand-hover);
+  --pf-t--global--text--color--link--default: var(--asl-brand);
+  --pf-t--global--text--color--link--hover: var(--asl-brand-hover);
+}
+
+html, body { min-height: 100%; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--pf-t--global--background--color--secondary--default);
+}
+
+/* ---- top bar ---- */
+.asl-masthead {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .75rem 16px;
+  background-image: linear-gradient(var(--asl-green-top), var(--asl-green-bottom));
+  border-block-end: 1px solid var(--asl-green-bottom);
+  color: #fff;
+  text-shadow: 0 .05rem .1rem rgb(0 0 0 / .5);
+}
+.asl-masthead img { height: 50px; width: auto; }
+.asl-masthead-title {
+  font-family: var(--pf-t--global--font--family--heading);
+  font-size: var(--pf-t--global--font--size--heading--h2);
+  font-weight: var(--pf-t--global--font--weight--heading--bold);
+}
+
+/* ---- content ---- */
+.asl-main {
+  flex: 1;
+  width: 100%;
+  max-width: 75rem;
+  margin-inline: auto;
+  padding: 2rem 16px;
+  display: grid;
+  align-content: start;
+  gap: var(--pf-t--global--spacer--lg);
+}
+.asl-narrow { max-width: 42rem; }
+
+.asl-gallery { --pf-v6-l-gallery--GridTemplateColumns--min: 18rem; }
+
+/* Whole-card links to the node's tools */
+a.asl-link-card {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+a.asl-link-card:hover,
+a.asl-link-card:focus-visible {
+  --pf-v6-c-card--BorderColor: var(--asl-green-bottom);
+  box-shadow: var(--pf-t--global--box-shadow--md);
+}
+a.asl-link-card:hover .pf-v6-c-card__title-text,
+a.asl-link-card:focus-visible .pf-v6-c-card__title-text {
+  color: var(--pf-t--global--text--color--link--default);
+}
+a.asl-link-card:focus-visible {
+  outline: var(--pf-t--global--border--width--strong) solid var(--pf-t--global--color--brand--default);
+  outline-offset: 2px;
+}
+.asl-card-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+}
+.asl-card-img + .pf-v6-c-card__title { padding-block-start: var(--pf-v6-c-card--first-child--PaddingBlockStart); }
+.asl-buttons { display: grid; align-content: start; gap: var(--pf-t--global--spacer--sm); }
+
+/* ---- footer ---- */
+.asl-footer {
+  padding: 1rem 16px 1.5rem;
+  text-align: center;
+  font-size: var(--pf-t--global--font--size--body--sm);
+  color: var(--pf-t--global--text--color--subtle);
+}
