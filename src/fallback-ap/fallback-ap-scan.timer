@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically check for saved Wi-Fi networks while the fallback AP is idle
+# Started and stopped along with fallback-ap.timer, so enabling that one
+# timer is still the only switch.
+PartOf=fallback-ap.timer
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+AccuracySec=10s

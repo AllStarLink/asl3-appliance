@@ -1,7 +1,10 @@
+prefix			?= /usr
 sysconfdir		?= /etc
 firewallddir	?= $(sysconfdir)/firewalld
 firewall_svcs	?= $(firewallddir)/services
-firewall_zones	?= $(firewallddir)/zones
+# A package default, not a conffile: firewalld rewrites its own copy in
+# /etc/firewalld/zones whenever the zone's permanent config changes.
+firewall_zones	?= $(prefix)/lib/firewalld/zones
 
 FIREWALLD_SERVICES = $(wildcard services/*.xml)
 FIREWALLD_ZONES = $(wildcard zones/*.xml)

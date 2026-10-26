@@ -21,13 +21,13 @@ Description: Appliance customization for Debian-based ASL "appliances"
 
 Package: asl3-appliance-pi
 Architecture: all
-Depends: ${misc:Depends}, avahi-daemon, asl3-appliance, raspi-config-core
+Depends: ${misc:Depends}, avahi-daemon, asl3-appliance, raspi-config-core, iw
 Conflicts: asl3-pi-appliance (<< 2.0.0), asl3-appliance-pc, asl3-appliance-uno-q
 Description: Appliance customization for Debian-based ASL "appliances" - Pi addons
 
 Package: asl3-appliance-pc
 Architecture: all
-Depends: ${misc:Depends}, avahi-daemon, asl3-appliance
+Depends: ${misc:Depends}, avahi-daemon, asl3-appliance, iw
 Conflicts: asl3-pi-appliance (<< 2.0.0), asl3-appliance-pi, asl3-appliance-uno-q
 Description: Appliance customization for Debian-based ASL "appliances" - PC addons
 
@@ -35,7 +35,7 @@ Package: asl3-appliance-uno-q
 Architecture: all
 Depends: ${misc:Depends}, avahi-daemon, asl3-appliance, arduino-app-cli,
  arduino-cli (>= 1.5.0),
- python3, python3-msgpack
+ python3, python3-msgpack, iw
 Conflicts: asl3-pi-appliance (<< 2.0.0), asl3-appliance-pc, asl3-appliance-pi
 Description: Appliance customization for Debian-based ASL appliances - Arduino UNO Q
  Provides the Arduino UNO Q LED matrix application and ASL3 node-status

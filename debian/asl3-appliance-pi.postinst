@@ -32,6 +32,12 @@ do_configure() {
 		nmcli connection delete asl-fallback-ap || true
 	fi
 
+	# The fallback AP is on by default. dh_installsystemd only enables it on
+	# first install (and 2.2.1-1 disabled it), so enable it on every
+	# install and upgrade.
+	deb-systemd-invoke enable fallback-ap.timer
+	deb-systemd-invoke start fallback-ap.timer
+
 	# Customize dphys-swapfile if its installed
 	if [ -f /etc/dphys-swapfile ]; then
 		# Undo the previous swap manipulations

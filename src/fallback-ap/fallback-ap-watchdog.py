@@ -34,13 +34,20 @@ so a ULA-only AP interface would carry that liability for no benefit.
 
 Configuration is read from environment variables, normally supplied by
 systemd via EnvironmentFile=/etc/default/asl3-fallback-ap.
+
+Run with --scan (fallback-ap-scan.timer) to check whether a saved Wi-Fi
+network has come back while the AP is up. The radio can't join another
+network while it's in AP mode, so without this the node would stay on the
+AP until some other interface brought connectivity back.
 """
 
+import fcntl
 import ipaddress
 import logging
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -59,6 +66,12 @@ DNSMASQ_SHARED_CONF = DNSMASQ_SHARED_DIR / "asl-fallback-ap.conf"
 # inside it AP_IPV4_CIDR picks — see src/apache2/000-default.conf.
 AP_NETWORK = ipaddress.IPv4Network("192.168.187.64/29")
 
+# Held for the whole run so the watchdog can't bring the AP back up while a
+# --scan run has it down on purpose.
+LOCK_FILE = Path("/run/fallback-ap-watchdog.lock")
+
+DEGRADED_STATES = ("none", "limited")
+
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -74,6 +87,11 @@ def load_config() -> dict:
         "conn_name": os.environ.get("AP_CONN_NAME", "asl-fallback-ap"),
     }
     validate_ap_cidr(cfg["ipv4_cidr"])
+    try:
+        cfg["scan_timeout"] = int(os.environ.get("AP_SCAN_TIMEOUT", "60"))
+    except ValueError:
+        log.error("AP_SCAN_TIMEOUT must be a whole number of seconds")
+        sys.exit(1)
     return cfg
 
 
@@ -152,6 +170,37 @@ def ap_profile_exists(conn_name: str) -> bool:
 
 def ap_is_active(conn_name: str) -> bool:
     return conn_name in active_connection_names()
+
+
+def have_saved_wifi_profiles(conn_name: str) -> bool:
+    """True if any autoconnect Wi-Fi profile other than the AP exists."""
+    result = nmcli("-t", "-f", "TYPE,AUTOCONNECT,NAME", "connection", "show")
+    for line in result.stdout.splitlines():
+        ctype, autoconnect, name = line.split(":", 2)
+        if ctype == "802-11-wireless" and autoconnect == "yes" and name != conn_name:
+            return True
+    return False
+
+
+def device_is_connected(ifname: str) -> bool:
+    result = nmcli("-g", "GENERAL.STATE", "device", "show", ifname)
+    return result.stdout.strip().startswith("100")
+
+
+def ap_station_count(ifname: str) -> int | None:
+    """Number of clients associated with the AP, or None if it can't be told."""
+    try:
+        result = subprocess.run(
+            ["iw", "dev", ifname, "station", "dump"],
+            capture_output=True, text=True, check=False
+        )
+    except FileNotFoundError:
+        log.error("iw is not installed; can't tell whether clients are on the AP")
+        return None
+    if result.returncode != 0:
+        log.error("iw station dump failed: %s", result.stderr.strip())
+        return None
+    return sum(1 for line in result.stdout.splitlines() if line.startswith("Station "))
 
 
 def get_interface_mac(ifname: str) -> str:
@@ -260,12 +309,54 @@ def deactivate_ap(cfg: dict) -> None:
     nmcli("connection", "down", cfg["conn_name"])
 
 
+def scan_for_networks(ifname: str, cfg: dict) -> bool:
+    """If the AP is up with no clients, take it down and give NM a chance to
+    autoconnect to a saved Wi-Fi profile; put the AP back if that fails."""
+    if not ap_is_active(cfg["conn_name"]):
+        return True
+
+    # Unknown counts as "someone might be using it" — leave it alone.
+    stations = ap_station_count(ifname)
+    if stations is None:
+        return True
+    if stations:
+        log.info("%d client(s) on the AP; not scanning", stations)
+        return True
+
+    if not have_saved_wifi_profiles(cfg["conn_name"]):
+        log.info("No saved Wi-Fi profiles to try; leaving the AP up")
+        return True
+
+    log.info("No clients on the AP — taking it down to look for saved networks")
+    nmcli("connection", "down", cfg["conn_name"])
+    # The `device disconnect` in activate_ap() blocks autoconnect on the
+    # device. NM clears that again on the AP's `connection up`, but make
+    # sure — if it stuck, NM wouldn't try any saved profile.
+    nmcli("device", "set", ifname, "autoconnect", "yes")
+    # Best effort — NM also scans on its own once the device is free.
+    nmcli("device", "wifi", "rescan", "ifname", ifname)
+
+    deadline = time.monotonic() + cfg["scan_timeout"]
+    while time.monotonic() < deadline:
+        time.sleep(5)
+        if device_is_connected(ifname) and get_connectivity_state() not in DEGRADED_STATES:
+            log.info("Joined a saved network; leaving the AP down")
+            return True
+
+    log.info("No usable network found within %ds; restoring the AP", cfg["scan_timeout"])
+    return activate_ap(ifname, cfg)
+
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
 
 def main() -> int:
+    scan = "--scan" in sys.argv[1:]
     cfg = load_config()
+
+    lock = open(LOCK_FILE, "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
 
     wireless_ifaces = get_wireless_interfaces()
     if not wireless_ifaces:
@@ -291,9 +382,12 @@ def main() -> int:
         # nm-shared firewalld zone.
         nmcli("connection", "modify", cfg["conn_name"], "connection.zone", "allstarlink")
 
+    if scan:
+        return 0 if scan_for_networks(ifname, cfg) else 1
+
     state = get_connectivity_state()
     log.info("Connectivity state: %s", state)
-    degraded = state in ("none", "limited")
+    degraded = state in DEGRADED_STATES
 
     currently_active = ap_is_active(cfg["conn_name"])
 

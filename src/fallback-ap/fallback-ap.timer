@@ -1,5 +1,6 @@
 [Unit]
 Description=Run the ASL3 fallback AP watchdog periodically
+Wants=fallback-ap-scan.timer
 
 [Timer]
 OnBootSec=2min
