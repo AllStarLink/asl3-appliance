@@ -37,7 +37,6 @@ systemd via EnvironmentFile=/etc/default/asl3-fallback-ap.
 """
 
 import ipaddress
-import json
 import logging
 import os
 import subprocess
@@ -46,8 +45,6 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("fallback-ap")
-
-STATE_FILE = Path("/run/fallback-ap-watchdog/suppressed-connections.json")
 
 # NM reads this directory's *.conf snippets into the dnsmasq instance it
 # spawns for any "shared"-method connection (see nm-settings(5), ipv4.method
@@ -157,14 +154,6 @@ def ap_is_active(conn_name: str) -> bool:
     return conn_name in active_connection_names()
 
 
-def get_ifname_for_connection(conn_name: str) -> str | None:
-    result = nmcli("-t", "-f", "connection.interface-name", "connection", "show", conn_name)
-    line = result.stdout.strip()
-    if ":" in line:
-        val = line.split(":", 1)[1].strip()
-        return val or None
-    return None
-
 def get_interface_mac(ifname: str) -> str:
     """Read the interface's MAC address from sysfs and format it for SSID use
     (colons stripped, uppercase) — e.g. AA:BB:CC:DD:EE:FF -> AABBCCDDEEFF."""
@@ -180,18 +169,18 @@ def get_interface_mac(ifname: str) -> str:
 # AP profile management
 # --------------------------------------------------------------------------
 
+def ap_ssid(ifname: str, cfg: dict) -> str:
+    return f"{cfg['ssid_prefix']}{get_interface_mac(ifname)}"
+
+
 def ensure_ap_profile(ifname: str, cfg: dict) -> None:
     """Create the fallback AP profile bound to the given interface if missing."""
-    mac = get_interface_mac(ifname)
-    ssid = f"{cfg['ssid_prefix']}{mac}"
-
-    if len(ssid) > 32:
+    if len(cfg["ssid"]) > 32:
         log.warning(
             "Generated SSID '%s' exceeds 32 bytes and will be truncated by "
-            "the driver — shorten AP_SSID_PREFIX", ssid
+            "the driver — shorten AP_SSID_PREFIX", cfg["ssid"]
         )
 
-    cfg["ssid"] = ssid
     log.info("Creating missing AP profile '%s' on %s", cfg["conn_name"], ifname)
 
     args = [
@@ -242,58 +231,15 @@ def write_dns_blackhole(cfg: dict) -> None:
 
 
 # --------------------------------------------------------------------------
-# Conflict handling — evict/restore other profiles bound to the same radio
-# --------------------------------------------------------------------------
-
-def find_conflicting_connections(ifname: str, ap_conn_name: str) -> list[str]:
-    """Other autoconnect-enabled profiles bound to the same wireless interface."""
-    conflicts = []
-    for name in connection_names():
-        if name == ap_conn_name:
-            continue
-        if get_ifname_for_connection(name) != ifname:
-            continue
-        autoconn = nmcli("-t", "-f", "connection.autoconnect", "connection", "show", name)
-        val = autoconn.stdout.strip().split(":", 1)[-1].strip().lower()
-        if val in ("yes", "true", "1"):
-            conflicts.append(name)
-    return conflicts
-
-
-def suppress_conflicts(ifname: str, ap_conn_name: str) -> None:
-    conflicts = find_conflicting_connections(ifname, ap_conn_name)
-    if not conflicts:
-        return
-    log.info("Suppressing autoconnect on conflicting profiles: %s", ", ".join(conflicts))
-    for name in conflicts:
-        nmcli("connection", "modify", name, "connection.autoconnect", "no")
-
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(conflicts))
-
-
-def restore_conflicts() -> None:
-    if not STATE_FILE.exists():
-        return
-    try:
-        conflicts = json.loads(STATE_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
-        conflicts = []
-
-    for name in conflicts:
-        log.info("Restoring autoconnect on %s", name)
-        nmcli("connection", "modify", name, "connection.autoconnect", "yes")
-
-    STATE_FILE.unlink(missing_ok=True)
-
-
-# --------------------------------------------------------------------------
 # Activate / deactivate
 # --------------------------------------------------------------------------
 
 def activate_ap(ifname: str, cfg: dict) -> bool:
-    suppress_conflicts(ifname, cfg["conn_name"])
-
+    # Other profiles on this radio are left with autoconnect as-is: NM never
+    # autoconnects onto a device with an active connection, so they can't
+    # preempt the AP, and they need to stay eligible to rejoin as soon as
+    # the AP is torn down.
+    #
     # Force the radio free of whatever's currently using it — an explicit
     # `connection up` below is authoritative regardless of autoconnect
     # priority, but disconnecting first avoids relying on NM to evict
@@ -312,7 +258,6 @@ def activate_ap(ifname: str, cfg: dict) -> bool:
 def deactivate_ap(cfg: dict) -> None:
     log.info("Connectivity restored — tearing down %s", cfg["conn_name"])
     nmcli("connection", "down", cfg["conn_name"])
-    restore_conflicts()
 
 
 # --------------------------------------------------------------------------
@@ -333,6 +278,10 @@ def main() -> int:
                   ", ".join(wireless_ifaces), ifname)
 
     write_dns_blackhole(cfg)
+
+    # Needed on every run (activate_ap logs it), not just when the profile
+    # is first created.
+    cfg["ssid"] = ap_ssid(ifname, cfg)
 
     if not ap_profile_exists(cfg["conn_name"]):
         ensure_ap_profile(ifname, cfg)
