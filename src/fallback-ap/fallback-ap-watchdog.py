@@ -72,6 +72,14 @@ LOCK_FILE = Path("/run/fallback-ap-watchdog.lock")
 
 DEGRADED_STATES = ("none", "limited")
 
+# How long a --scan run waits for a saved network to show up in the scan
+# before putting the AP back early, instead of waiting out AP_SCAN_TIMEOUT.
+SCAN_SETTLE_SECONDS = 15
+
+# NMDeviceState values between "prepare" and "activated": NM is joining.
+DEVICE_ACTIVATING = range(40, 100)
+DEVICE_ACTIVATED = 100
+
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -172,19 +180,50 @@ def ap_is_active(conn_name: str) -> bool:
     return conn_name in active_connection_names()
 
 
-def have_saved_wifi_profiles(conn_name: str) -> bool:
-    """True if any autoconnect Wi-Fi profile other than the AP exists."""
+def nmcli_unescape(value: str) -> str:
+    """Undo nmcli's terse-mode escaping of ':' and '\\'."""
+    return value.replace("\\:", ":").replace("\\\\", "\\")
+
+
+def saved_wifi_profiles(conn_name: str) -> list[str]:
+    """Names of the autoconnect Wi-Fi profiles other than the AP."""
     result = nmcli("-t", "-f", "TYPE,AUTOCONNECT,NAME", "connection", "show")
+    profiles = []
     for line in result.stdout.splitlines():
         ctype, autoconnect, name = line.split(":", 2)
+        name = nmcli_unescape(name)
         if ctype == "802-11-wireless" and autoconnect == "yes" and name != conn_name:
-            return True
-    return False
+            profiles.append(name)
+    return profiles
 
 
-def device_is_connected(ifname: str) -> bool:
+def saved_ssids(profiles: list[str]) -> tuple[set[str], bool]:
+    """SSIDs of the given profiles, and whether any of them is hidden."""
+    ssids, hidden = set(), False
+    for name in profiles:
+        result = nmcli("-g", "802-11-wireless.ssid,802-11-wireless.hidden",
+                       "connection", "show", name)
+        lines = result.stdout.splitlines()
+        if lines:
+            ssids.add(nmcli_unescape(lines[0]))
+        if len(lines) > 1 and lines[1] == "yes":
+            hidden = True
+    return ssids, hidden
+
+
+def visible_ssids(ifname: str) -> set[str]:
+    """SSIDs in NM's current scan results, without starting a new scan."""
+    result = nmcli("-t", "-f", "SSID", "device", "wifi", "list",
+                   "ifname", ifname, "--rescan", "no")
+    return {nmcli_unescape(line) for line in result.stdout.splitlines() if line}
+
+
+def device_state(ifname: str) -> int:
     result = nmcli("-g", "GENERAL.STATE", "device", "show", ifname)
-    return result.stdout.strip().startswith("100")
+    try:
+        return int(result.stdout.split()[0])
+    except (IndexError, ValueError):
+        return 0
 
 
 def ap_station_count(ifname: str) -> int | None:
@@ -323,9 +362,11 @@ def scan_for_networks(ifname: str, cfg: dict) -> bool:
         log.info("%d client(s) on the AP; not scanning", stations)
         return True
 
-    if not have_saved_wifi_profiles(cfg["conn_name"]):
+    profiles = saved_wifi_profiles(cfg["conn_name"])
+    if not profiles:
         log.info("No saved Wi-Fi profiles to try; leaving the AP up")
         return True
+    ssids, hidden = saved_ssids(profiles)
 
     log.info("No clients on the AP — taking it down to look for saved networks")
     nmcli("connection", "down", cfg["conn_name"])
@@ -336,12 +377,23 @@ def scan_for_networks(ifname: str, cfg: dict) -> bool:
     # Best effort — NM also scans on its own once the device is free.
     nmcli("device", "wifi", "rescan", "ifname", ifname)
 
-    deadline = time.monotonic() + cfg["scan_timeout"]
+    # Waiting out the whole timeout only helps if NM has something to join.
+    # A hidden network never shows up by name in a scan, so with one saved
+    # there's no telling — wait the whole timeout then.
+    start = time.monotonic()
+    deadline = start + cfg["scan_timeout"]
     while time.monotonic() < deadline:
         time.sleep(5)
-        if device_is_connected(ifname) and get_connectivity_state() not in DEGRADED_STATES:
+        state = device_state(ifname)
+        if state == DEVICE_ACTIVATED and get_connectivity_state() not in DEGRADED_STATES:
             log.info("Joined a saved network; leaving the AP down")
             return True
+        if (not hidden and state not in DEVICE_ACTIVATING
+                and time.monotonic() - start >= SCAN_SETTLE_SECONDS
+                and not ssids & visible_ssids(ifname)):
+            log.info("No saved network in range after %ds; restoring the AP",
+                     SCAN_SETTLE_SECONDS)
+            return activate_ap(ifname, cfg)
 
     log.info("No usable network found within %ds; restoring the AP", cfg["scan_timeout"])
     return activate_ap(ifname, cfg)

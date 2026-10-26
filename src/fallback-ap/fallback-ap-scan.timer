@@ -5,6 +5,6 @@ Description=Periodically check for saved Wi-Fi networks while the fallback AP is
 PartOf=fallback-ap.timer
 
 [Timer]
-OnBootSec=10min
-OnUnitActiveSec=10min
+OnBootSec=5min
+OnUnitActiveSec=5min
 AccuracySec=10s
