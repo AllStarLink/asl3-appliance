@@ -1,3 +1,9 @@
+asl3-appliance (2.2.3-1) stable; urgency=medium
+
+  * Fix issues with fallback-ap
+
+ -- Helium <jason@mfamily.org>  Mon, 26 Oct 2026 20:10:14 -0400
+
 asl3-appliance (2.2.2-1) stable; urgency=medium
 
   * Fix bug in asl-enable-pi-serial (#8)
