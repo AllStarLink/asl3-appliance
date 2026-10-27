@@ -1,4 +1,4 @@
-etc/firewalld/zones/*
+usr/lib/firewalld/zones/*
 etc/firewalld/services/*
 etc/cockpit/cockpit.conf
 etc/apache2/conf-available/nocache.conf

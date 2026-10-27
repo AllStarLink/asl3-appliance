@@ -33,3 +33,8 @@ AP_CHANNEL="11"
 
 # Name of the NetworkManager connection profile the watchdog manages
 AP_CONN_NAME="asl-fallback-ap"
+
+# While the AP is up with no clients, fallback-ap-scan.timer periodically
+# takes it down so a saved Wi-Fi network can be rejoined. Seconds to wait
+# for that before putting the AP back.
+AP_SCAN_TIMEOUT="60"
