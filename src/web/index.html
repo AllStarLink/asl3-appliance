@@ -1,103 +1,89 @@
 <!doctype html>
-<html lang="en" class="h-100" data-bs-theme="auto">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
     <meta name="author" content="AllStarLink Inc.">
     <title>AllStarLink Dashboard</title>
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/cover.css" rel="stylesheet">
+    <link href="css/patternfly.css" rel="stylesheet">
+    <link href="css/asl.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="img/allstar-logo-small.png">
+    <script src="js/theme.js"></script>
   </head>
-  <body class="h-100 text-center text-bg-dark">
-    <header>
-      <div class="container-fluid text-center py-3">
-        <div class="row justify-content-between">
-          <div class="col-4 header-col-contents"><img src="img/allstar-logo-small.png"></div>
-          <div class="col-4 header-col-contents"><h2>AllStarLink 3</h2></div>
-        </div>
-        
-      </div>
+  <body>
+    <header class="asl-masthead">
+      <img src="img/allstar-logo-small.png" alt="AllStarLink" width="129" height="60">
+      <h1 class="asl-masthead-title">AllStarLink 3</h1>
     </header>
-    <main class="px-3">
-      <div class="container px-4 py-5" id="custom-cards">
-        <div class="row row-cols-1 row-cols-lg-3 align-items-stretch g-4 py-5">
-             <!-- Left Card-->
-              <div class="col">
-                <a id="cockpit-link" href="#COCKPIT" class="link-underline link-underline-opacity-0">
-                <div class="card card-cover h-100 overflow-hidden text-bg-dark rounded-4 shadow-lg"
-                    style="background-image: url('img/cockpit.jpg');">
-                  <div class="d-flex flex-column h-100 p-5 pb-3 text-white text-shadow-1">
-                    <h3 class="pt-5 mt-5 mb-4 display-6 lh-1 fw-bold">Web Admin Portal</h3>
-                    Manage your node from your browser using Cockpit
-                  </div>
-                </div>
-                </a>
-              </div>
-      
-              <!-- Center Card-->
-              <div class="col">
-                <a id="allmon3-link" href="#ALLMON3" class="link-underline link-underline-opacity-0">
-                <div class="card card-cover h-100 overflow-hidden text-bg-dark rounded-4 shadow-lg"
-                    style="background-image: url('img/allmon3.jpg');">
-                  <div class="d-flex flex-column h-100 p-5 pb-3 text-white text-shadow-1">
-                    <h3 class="pt-5 mt-5 mb-4 display-6 lh-1 fw-bold">Node Links</h3>
-                    <p>View and manage connections to and from the node with Allmon3</p>
-                  </div>
-                </div>
-                </a>
-              </div>
-              
-              <!-- Right Card -->
-              <div class="col">
-                <a href="https://allstarlink.github.io" class="link-underline link-underline-opacity-0" target="_blank">
-                <div class="card card-cover h-100 overflow-hidden text-bg-dark rounded-4 shadow-lg"
-                  style="background-image: url('img/manual.jpg');">
-                  <div class="d-flex flex-column h-100 p-5 pb-3 text-shadow-1">
-                    <h3 class="pt-5 mt-5 mb-4 display-6 lh-1 fw-bold">ASL Manual</h3>
-                    <p>Get help using AllStarLink from the online comprehensive manual</p>
-                  </div>
-                </div>
-                </a>
-              </div>
-        </div>
-        <div class="row row-cols-1 row-cols-lg-3 align-items-stretch g-4 py-1">
-          <div class="col-4">
-            <h4>Prefer SSH?</h3>
-            <p style="text-align: justify;">As always, use of SSH is available by SSHing to <span id="node-host">node12345.local</span> using your
-            favorite terminal or SSH client. A web-based SSH client is available within
-            the Web Admin Portal.</p>
+
+    <main class="asl-main">
+      <div class="pf-v6-l-gallery pf-m-gutter asl-gallery">
+        <a id="aslwebui-link" href="#ASLWEBUI" class="pf-v6-c-card asl-link-card">
+          <img class="asl-card-img" src="img/admin-panel.webp" alt="">
+          <div class="pf-v6-c-card__title">
+            <h2 class="pf-v6-c-card__title-text">Node Admin</h2>
           </div>
-          <div class="col-4">
-            <div class="d-grid gap-2 mx-auto">
-              <a href="https://allstarlink.org" class="btn btn-light" role="button" target="_blank">AllStarLink Site</a>
-              <a href="https://community.allstarlink.org" class="btn btn-light" role="button" target="_blank">AllStarLink Forum</a>
-              <a href="https://github.com/AllStarLink" class="btn btn-light" role="button" target="_blank">AllStarLink @ GitHub</a>
-            </div>
+          <div class="pf-v6-c-card__body">Manage your node from your browser using ASL Web UI</div>
+        </a>
+
+        <a id="allmon3-link" href="#ALLMON3" class="pf-v6-c-card asl-link-card">
+          <img class="asl-card-img" src="img/allmon-panel.webp" alt="">
+          <div class="pf-v6-c-card__title">
+            <h2 class="pf-v6-c-card__title-text">Node Links</h2>
           </div>
-          <div class="col-4">
-            <h4>Love using AllStarLink?</h3>
-            <p style="text-align: justify;">The implementation and upkeep of this system is very costly.
+          <div class="pf-v6-c-card__body">View and manage connections to and from the node with Allmon3</div>
+        </a>
+
+        <a id="cockpit-link" href="#COCKPIT" target="_blank" class="pf-v6-c-card asl-link-card">
+          <img class="asl-card-img" src="img/cockpit-panel.webp" alt="">
+          <div class="pf-v6-c-card__title">
+            <h2 class="pf-v6-c-card__title-text">Linux Admin</h2>
+          </div>
+          <div class="pf-v6-c-card__body">Manage the underlying Linux system using Cockpit</div>
+        </a>
+      </div>
+
+      <div class="pf-v6-l-gallery pf-m-gutter asl-gallery">
+
+        <a href="https://allstarlink.github.io" target="_blank" class="pf-v6-c-card asl-link-card">
+          <img class="asl-card-img" src="img/manual-panel.webp" alt="">
+          <div class="pf-v6-c-card__title">
+            <h2 class="pf-v6-c-card__title-text">ASL Manual</h2>
+          </div>
+          <div class="pf-v6-c-card__body">Get help using AllStarLink from the online comprehensive manual</div>
+        </a>
+
+        <a href="https://community.allstarlink.org" target="_blank" class="pf-v6-c-card asl-link-card">
+          <img class="asl-card-img" src="img/community-panel.webp" alt="">
+          <div class="pf-v6-c-card__title">
+            <h2 class="pf-v6-c-card__title-text">AllStarLink Community</h2>
+          </div>
+          <div class="pf-v6-c-card__body">Get help using AllStarLink from the online comprehensive manual</div>
+        </a>
+  
+        <a href="https://allstarlink.org/donate/" target="_blank" class="pf-v6-c-card asl-link-card">
+          <img class="asl-card-img" src="img/donate-panel.webp" alt="">
+          <div class="pf-v6-c-card__title">
+            <h2 class="pf-v6-c-card__title-text">Donate</h2>
+          </div>
+          <div class="pf-v6-c-card__body">
+		   <p>The implementation and upkeep of this system is very costly.
               All software used by AllStarLink is open source and developed by volunteers to be freely
               available and used by the amateur radio community. Any monetary help you give will be
               much appreciated.</p>
-            <p>Allstarlink Inc. is a US 501(c)(3) non-profit organization.</p>
-              <a href="https://donorbox.org/allstarlink-donations?amount=24&default_interval=a&utm_campaign=donate_4&utm_source=asl" target="_blank"
-                class="btn btn-light" role="button">Securely Donate</a>
-            </a>
+            <p>AllStarLink Inc. is a US 501(c)(3) non-profit organization.</p>
           </div>
-        </div>
+        </a>
+ 
       </div>
     </main>
 
-    <footer class="mt-auto text-white-50">
-      <p>AllStarLink 3 Appliance - All source code is available under terms 
+    <footer class="asl-footer">
+      <p>AllStarLink 3 Appliance - All source code is available under terms
         of various open source licenses including the GPL, AGPLv3, and BSD licenses.</p>
     </footer>
- 
-     <script src="js/bootstrap.min.js"></script>
-     <script src="js/index.js"></script>
+
+    <script src="js/index.js"></script>
   </body>
 </html>
-
