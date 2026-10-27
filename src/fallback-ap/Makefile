@@ -8,6 +8,8 @@ cockpit_brand	?= $(prefix)/share/cockpit/branding/debian-AllStarLink
 INSTALLABLES = \
 	$(DESTDIR)/lib/systemd/system/fallback-ap.service \
 	$(DESTDIR)/lib/systemd/system/fallback-ap.timer \
+	$(DESTDIR)/lib/systemd/system/fallback-ap-scan.service \
+	$(DESTDIR)/lib/systemd/system/fallback-ap-scan.timer \
 	$(DESTDIR)/etc/default/fallback-ap \
 	$(DESTDIR)/usr/libexec/asl3/fallback-ap-watchdog.py
 

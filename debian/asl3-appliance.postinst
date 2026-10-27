@@ -43,16 +43,51 @@ do_configure() {
 	deb-systemd-invoke restart asterisk
 	deb-systemd-invoke restart firewalld
 
+	# The allstarlink zone ships in /usr/lib/firewalld/zones. It used to be a
+	# conffile in /etc/firewalld/zones, but firewalld rewrites that copy
+	# whenever the zone's permanent config changes (Cockpit, firewall-cmd
+	# --permanent, or this script), so dpkg took it for an admin edit and
+	# kept the old copy on upgrade. A copy left as shipped is removed so the
+	# packaged zone applies; any other may hold ports the admin opened, so
+	# it stays and gets what the appliance needs added below.
+	OLD_ZONE=/etc/firewalld/zones/allstarlink.xml
+	OLD_ZONE_MD5=$(dpkg-query -W -f='${Conffiles}\n' asl3-appliance | \
+		awk -v f="$OLD_ZONE" '$1 == f { print $2 }')
+	if [ -n "$OLD_ZONE_MD5" ] && [ -f "$OLD_ZONE" ] && \
+		[ "$(md5sum < "$OLD_ZONE" | cut -d' ' -f1)" = "$OLD_ZONE_MD5" ]; then
+		rm -f "$OLD_ZONE"
+	fi
+	rm -f "$OLD_ZONE.dpkg-dist" "$OLD_ZONE.dpkg-old"
+
+	# What the appliance needs in the zone, whichever copy is in effect:
+	# DHCP and DNS for the fallback AP (src/fallback-ap). Queried first so
+	# the packaged zone isn't copied into /etc for nothing.
+	ZONE_RULES=(
+		'rule family="ipv4" service name="dhcp" accept'
+		'rule family="ipv4" source address="192.168.187.64/29" service name="dns" accept'
+	)
+
 	# Change default firewalld zone
 	if [ "$(firewall-cmd --state)" = "running" ]; then
 		deb-systemd-invoke reload firewalld
 		firewall-cmd --set-default-zone=allstarlink
-		firewall-cmd --zone=allstarlink --permanent --add-service=echolink
-		firewall-cmd --zone=allstarlink --add-service=echolink
+		for fw in --permanent ""; do
+			firewall-cmd $fw --zone=allstarlink --query-service=echolink > /dev/null || \
+				firewall-cmd $fw --zone=allstarlink --add-service=echolink
+			for rule in "${ZONE_RULES[@]}"; do
+				firewall-cmd $fw --zone=allstarlink --query-rich-rule="$rule" > /dev/null || \
+					firewall-cmd $fw --zone=allstarlink --add-rich-rule="$rule"
+			done
+		done
 	else
 		set +e
 		firewall-offline-cmd --set-default-zone=allstarlink
-		firewall-offline-cmd --zone=allstarlink --add-service=echolink
+		firewall-offline-cmd --zone=allstarlink --query-service=echolink > /dev/null || \
+			firewall-offline-cmd --zone=allstarlink --add-service=echolink
+		for rule in "${ZONE_RULES[@]}"; do
+			firewall-offline-cmd --zone=allstarlink --query-rich-rule="$rule" > /dev/null || \
+				firewall-offline-cmd --zone=allstarlink --add-rich-rule="$rule"
+		done
 	fi
 
 	set -e

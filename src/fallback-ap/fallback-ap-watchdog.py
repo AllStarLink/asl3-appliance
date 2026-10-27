@@ -34,20 +34,24 @@ so a ULA-only AP interface would carry that liability for no benefit.
 
 Configuration is read from environment variables, normally supplied by
 systemd via EnvironmentFile=/etc/default/asl3-fallback-ap.
+
+Run with --scan (fallback-ap-scan.timer) to check whether a saved Wi-Fi
+network has come back while the AP is up. The radio can't join another
+network while it's in AP mode, so without this the node would stay on the
+AP until some other interface brought connectivity back.
 """
 
+import fcntl
 import ipaddress
-import json
 import logging
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("fallback-ap")
-
-STATE_FILE = Path("/run/fallback-ap-watchdog/suppressed-connections.json")
 
 # NM reads this directory's *.conf snippets into the dnsmasq instance it
 # spawns for any "shared"-method connection (see nm-settings(5), ipv4.method
@@ -61,6 +65,20 @@ DNSMASQ_SHARED_CONF = DNSMASQ_SHARED_DIR / "asl-fallback-ap.conf"
 # Apache's reverse proxy to fallback-AP clients regardless of which address
 # inside it AP_IPV4_CIDR picks — see src/apache2/000-default.conf.
 AP_NETWORK = ipaddress.IPv4Network("192.168.187.64/29")
+
+# Held for the whole run so the watchdog can't bring the AP back up while a
+# --scan run has it down on purpose.
+LOCK_FILE = Path("/run/fallback-ap-watchdog.lock")
+
+DEGRADED_STATES = ("none", "limited")
+
+# How long a --scan run waits for a saved network to show up in the scan
+# before putting the AP back early, instead of waiting out AP_SCAN_TIMEOUT.
+SCAN_SETTLE_SECONDS = 15
+
+# NMDeviceState values between "prepare" and "activated": NM is joining.
+DEVICE_ACTIVATING = range(40, 100)
+DEVICE_ACTIVATED = 100
 
 
 # --------------------------------------------------------------------------
@@ -77,6 +95,11 @@ def load_config() -> dict:
         "conn_name": os.environ.get("AP_CONN_NAME", "asl-fallback-ap"),
     }
     validate_ap_cidr(cfg["ipv4_cidr"])
+    try:
+        cfg["scan_timeout"] = int(os.environ.get("AP_SCAN_TIMEOUT", "60"))
+    except ValueError:
+        log.error("AP_SCAN_TIMEOUT must be a whole number of seconds")
+        sys.exit(1)
     return cfg
 
 
@@ -157,13 +180,67 @@ def ap_is_active(conn_name: str) -> bool:
     return conn_name in active_connection_names()
 
 
-def get_ifname_for_connection(conn_name: str) -> str | None:
-    result = nmcli("-t", "-f", "connection.interface-name", "connection", "show", conn_name)
-    line = result.stdout.strip()
-    if ":" in line:
-        val = line.split(":", 1)[1].strip()
-        return val or None
-    return None
+def nmcli_unescape(value: str) -> str:
+    """Undo nmcli's terse-mode escaping of ':' and '\\'."""
+    return value.replace("\\:", ":").replace("\\\\", "\\")
+
+
+def saved_wifi_profiles(conn_name: str) -> list[str]:
+    """Names of the autoconnect Wi-Fi profiles other than the AP."""
+    result = nmcli("-t", "-f", "TYPE,AUTOCONNECT,NAME", "connection", "show")
+    profiles = []
+    for line in result.stdout.splitlines():
+        ctype, autoconnect, name = line.split(":", 2)
+        name = nmcli_unescape(name)
+        if ctype == "802-11-wireless" and autoconnect == "yes" and name != conn_name:
+            profiles.append(name)
+    return profiles
+
+
+def saved_ssids(profiles: list[str]) -> tuple[set[str], bool]:
+    """SSIDs of the given profiles, and whether any of them is hidden."""
+    ssids, hidden = set(), False
+    for name in profiles:
+        result = nmcli("-g", "802-11-wireless.ssid,802-11-wireless.hidden",
+                       "connection", "show", name)
+        lines = result.stdout.splitlines()
+        if lines:
+            ssids.add(nmcli_unescape(lines[0]))
+        if len(lines) > 1 and lines[1] == "yes":
+            hidden = True
+    return ssids, hidden
+
+
+def visible_ssids(ifname: str) -> set[str]:
+    """SSIDs in NM's current scan results, without starting a new scan."""
+    result = nmcli("-t", "-f", "SSID", "device", "wifi", "list",
+                   "ifname", ifname, "--rescan", "no")
+    return {nmcli_unescape(line) for line in result.stdout.splitlines() if line}
+
+
+def device_state(ifname: str) -> int:
+    result = nmcli("-g", "GENERAL.STATE", "device", "show", ifname)
+    try:
+        return int(result.stdout.split()[0])
+    except (IndexError, ValueError):
+        return 0
+
+
+def ap_station_count(ifname: str) -> int | None:
+    """Number of clients associated with the AP, or None if it can't be told."""
+    try:
+        result = subprocess.run(
+            ["iw", "dev", ifname, "station", "dump"],
+            capture_output=True, text=True, check=False
+        )
+    except FileNotFoundError:
+        log.error("iw is not installed; can't tell whether clients are on the AP")
+        return None
+    if result.returncode != 0:
+        log.error("iw station dump failed: %s", result.stderr.strip())
+        return None
+    return sum(1 for line in result.stdout.splitlines() if line.startswith("Station "))
+
 
 def get_interface_mac(ifname: str) -> str:
     """Read the interface's MAC address from sysfs and format it for SSID use
@@ -180,18 +257,18 @@ def get_interface_mac(ifname: str) -> str:
 # AP profile management
 # --------------------------------------------------------------------------
 
+def ap_ssid(ifname: str, cfg: dict) -> str:
+    return f"{cfg['ssid_prefix']}{get_interface_mac(ifname)}"
+
+
 def ensure_ap_profile(ifname: str, cfg: dict) -> None:
     """Create the fallback AP profile bound to the given interface if missing."""
-    mac = get_interface_mac(ifname)
-    ssid = f"{cfg['ssid_prefix']}{mac}"
-
-    if len(ssid) > 32:
+    if len(cfg["ssid"]) > 32:
         log.warning(
             "Generated SSID '%s' exceeds 32 bytes and will be truncated by "
-            "the driver — shorten AP_SSID_PREFIX", ssid
+            "the driver — shorten AP_SSID_PREFIX", cfg["ssid"]
         )
 
-    cfg["ssid"] = ssid
     log.info("Creating missing AP profile '%s' on %s", cfg["conn_name"], ifname)
 
     args = [
@@ -242,58 +319,15 @@ def write_dns_blackhole(cfg: dict) -> None:
 
 
 # --------------------------------------------------------------------------
-# Conflict handling — evict/restore other profiles bound to the same radio
-# --------------------------------------------------------------------------
-
-def find_conflicting_connections(ifname: str, ap_conn_name: str) -> list[str]:
-    """Other autoconnect-enabled profiles bound to the same wireless interface."""
-    conflicts = []
-    for name in connection_names():
-        if name == ap_conn_name:
-            continue
-        if get_ifname_for_connection(name) != ifname:
-            continue
-        autoconn = nmcli("-t", "-f", "connection.autoconnect", "connection", "show", name)
-        val = autoconn.stdout.strip().split(":", 1)[-1].strip().lower()
-        if val in ("yes", "true", "1"):
-            conflicts.append(name)
-    return conflicts
-
-
-def suppress_conflicts(ifname: str, ap_conn_name: str) -> None:
-    conflicts = find_conflicting_connections(ifname, ap_conn_name)
-    if not conflicts:
-        return
-    log.info("Suppressing autoconnect on conflicting profiles: %s", ", ".join(conflicts))
-    for name in conflicts:
-        nmcli("connection", "modify", name, "connection.autoconnect", "no")
-
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(conflicts))
-
-
-def restore_conflicts() -> None:
-    if not STATE_FILE.exists():
-        return
-    try:
-        conflicts = json.loads(STATE_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
-        conflicts = []
-
-    for name in conflicts:
-        log.info("Restoring autoconnect on %s", name)
-        nmcli("connection", "modify", name, "connection.autoconnect", "yes")
-
-    STATE_FILE.unlink(missing_ok=True)
-
-
-# --------------------------------------------------------------------------
 # Activate / deactivate
 # --------------------------------------------------------------------------
 
 def activate_ap(ifname: str, cfg: dict) -> bool:
-    suppress_conflicts(ifname, cfg["conn_name"])
-
+    # Other profiles on this radio are left with autoconnect as-is: NM never
+    # autoconnects onto a device with an active connection, so they can't
+    # preempt the AP, and they need to stay eligible to rejoin as soon as
+    # the AP is torn down.
+    #
     # Force the radio free of whatever's currently using it — an explicit
     # `connection up` below is authoritative regardless of autoconnect
     # priority, but disconnecting first avoids relying on NM to evict
@@ -312,7 +346,57 @@ def activate_ap(ifname: str, cfg: dict) -> bool:
 def deactivate_ap(cfg: dict) -> None:
     log.info("Connectivity restored — tearing down %s", cfg["conn_name"])
     nmcli("connection", "down", cfg["conn_name"])
-    restore_conflicts()
+
+
+def scan_for_networks(ifname: str, cfg: dict) -> bool:
+    """If the AP is up with no clients, take it down and give NM a chance to
+    autoconnect to a saved Wi-Fi profile; put the AP back if that fails."""
+    if not ap_is_active(cfg["conn_name"]):
+        return True
+
+    # Unknown counts as "someone might be using it" — leave it alone.
+    stations = ap_station_count(ifname)
+    if stations is None:
+        return True
+    if stations:
+        log.info("%d client(s) on the AP; not scanning", stations)
+        return True
+
+    profiles = saved_wifi_profiles(cfg["conn_name"])
+    if not profiles:
+        log.info("No saved Wi-Fi profiles to try; leaving the AP up")
+        return True
+    ssids, hidden = saved_ssids(profiles)
+
+    log.info("No clients on the AP — taking it down to look for saved networks")
+    nmcli("connection", "down", cfg["conn_name"])
+    # The `device disconnect` in activate_ap() blocks autoconnect on the
+    # device. NM clears that again on the AP's `connection up`, but make
+    # sure — if it stuck, NM wouldn't try any saved profile.
+    nmcli("device", "set", ifname, "autoconnect", "yes")
+    # Best effort — NM also scans on its own once the device is free.
+    nmcli("device", "wifi", "rescan", "ifname", ifname)
+
+    # Waiting out the whole timeout only helps if NM has something to join.
+    # A hidden network never shows up by name in a scan, so with one saved
+    # there's no telling — wait the whole timeout then.
+    start = time.monotonic()
+    deadline = start + cfg["scan_timeout"]
+    while time.monotonic() < deadline:
+        time.sleep(5)
+        state = device_state(ifname)
+        if state == DEVICE_ACTIVATED and get_connectivity_state() not in DEGRADED_STATES:
+            log.info("Joined a saved network; leaving the AP down")
+            return True
+        if (not hidden and state not in DEVICE_ACTIVATING
+                and time.monotonic() - start >= SCAN_SETTLE_SECONDS
+                and not ssids & visible_ssids(ifname)):
+            log.info("No saved network in range after %ds; restoring the AP",
+                     SCAN_SETTLE_SECONDS)
+            return activate_ap(ifname, cfg)
+
+    log.info("No usable network found within %ds; restoring the AP", cfg["scan_timeout"])
+    return activate_ap(ifname, cfg)
 
 
 # --------------------------------------------------------------------------
@@ -320,7 +404,11 @@ def deactivate_ap(cfg: dict) -> None:
 # --------------------------------------------------------------------------
 
 def main() -> int:
+    scan = "--scan" in sys.argv[1:]
     cfg = load_config()
+
+    lock = open(LOCK_FILE, "w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
 
     wireless_ifaces = get_wireless_interfaces()
     if not wireless_ifaces:
@@ -334,6 +422,10 @@ def main() -> int:
 
     write_dns_blackhole(cfg)
 
+    # Needed on every run (activate_ap logs it), not just when the profile
+    # is first created.
+    cfg["ssid"] = ap_ssid(ifname, cfg)
+
     if not ap_profile_exists(cfg["conn_name"]):
         ensure_ap_profile(ifname, cfg)
     else:
@@ -342,9 +434,12 @@ def main() -> int:
         # nm-shared firewalld zone.
         nmcli("connection", "modify", cfg["conn_name"], "connection.zone", "allstarlink")
 
+    if scan:
+        return 0 if scan_for_networks(ifname, cfg) else 1
+
     state = get_connectivity_state()
     log.info("Connectivity state: %s", state)
-    degraded = state in ("none", "limited")
+    degraded = state in DEGRADED_STATES
 
     currently_active = ap_is_active(cfg["conn_name"])
 
