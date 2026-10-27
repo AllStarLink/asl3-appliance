@@ -1,3 +1,16 @@
+asl3-appliance (3.0.0-1) stable; urgency=medium
+
+  * Entirely new landing page
+  * Integration with ASL Web UI
+  * Major improvements in the Fallback AP function
+  * Changes to Apache configuration management
+  * Fix Cockpit theming
+  * Management of admin groups
+  * Creation of the subpackage asl3-appliance-uno-q and 
+    specific support for the Uno Q platform
+
+ -- Helium <jason@mfamily.org>  Tue, 27 Oct 2026 15:58:24 -0400
+
 asl3-appliance (2.2.2-1) stable; urgency=medium
 
   * Fix bug in asl-enable-pi-serial (#8)
