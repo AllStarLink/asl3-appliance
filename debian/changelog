@@ -1,3 +1,10 @@
+asl3-appliance (3.0.1-1) stable; urgency=medium
+
+  * Serve /var/www/html as a fallback #22
+  * Fix fallback-AP page assets #22
+
+ -- Helium <jason@mfamily.org>  Fri, 30 Oct 2026 17:09:56 -0400
+
 asl3-appliance (3.0.0-1) stable; urgency=medium
 
   * Entirely new landing page
