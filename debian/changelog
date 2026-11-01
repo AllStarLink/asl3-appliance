@@ -1,3 +1,9 @@
+asl3-appliance (3.0.3-1) stable; urgency=medium
+
+  * Add TLS cert management for SANs + Safarai bugs 
+
+ -- Helium <jason@mfamily.org>  Sun, 01 Nov 2026 15:28:58 -0500
+
 asl3-appliance (3.0.2-1) stable; urgency=medium
 
   * Revert DocRoot to /var/www/html, move landing pages
