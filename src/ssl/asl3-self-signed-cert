@@ -1,0 +1,240 @@
+#!/usr/bin/bash
+#
+# asl3-self-signed-cert: keep Apache's self-signed certificate
+# (/etc/ssl/certs/ssl-cert-snakeoil.pem) one that Macs, iPhones and iPads
+# can be told to trust.
+#
+# Safari refuses WebSocket connections to a server whose certificate the
+# device does not trust, even after the user accepts the page's warning
+# (AllStarLink/asl-web-ui#46). A self-signed certificate can be trusted
+# in the Keychain only if it meets Apple's rules for TLS server
+# certificates (https://support.apple.com/en-us/103769): the names in a
+# subjectAltName, extendedKeyUsage serverAuth, and a validity of 825 days
+# or fewer. The certificate that first boot or make-ssl-cert creates
+# meets none or only some of these.
+#
+# Usage: asl3-self-signed-cert [--if-needed | --renew | --check] [--name NAME]...
+#
+#   --if-needed  (the default) replace the certificate if it is self-signed
+#                and breaks one of the rules or expires within 30 days, and
+#                give Cockpit a copy
+#   --renew      replace the certificate if it is self-signed, regardless
+#   --check      only report; exit 0 if it is fine, 1 if --if-needed would
+#                replace it or give Cockpit a copy
+#   --name NAME  another DNS name or IP address to put in it (repeatable)
+#
+# A certificate that is not self-signed is never replaced: --check and
+# --renew exit 2, --if-needed does nothing. Other errors exit 3.
+#
+# The new certificate names <host>.local, <host>, the full hostname if it
+# has a domain, the names and addresses already in the old certificate,
+# and any --name. Apache is not reloaded; the caller does that. A missing
+# certificate is created.
+#
+# If Cockpit is installed, it gets a copy of the certificate, so that one
+# trusted certificate covers both: /etc/cockpit/ws-certs.d/50-asl3-self-signed.cert
+# and .key. Cockpit uses the last *.cert there in alphabetical order, so the
+# copy wins over Cockpit's own 0-self-signed.cert but not over asl-web-ui's
+# Let's Encrypt copy (90-asl-web-ui.cert) or a certificate an admin added
+# with a name starting with a letter. Cockpit restarts when its copy changes.
+
+set -euo pipefail
+
+CERT=/etc/ssl/certs/ssl-cert-snakeoil.pem
+KEY=/etc/ssl/private/ssl-cert-snakeoil.key
+DAYS=825
+RENEW_BEFORE_DAYS=30
+COCKPIT_CERTS=/etc/cockpit/ws-certs.d
+COCKPIT_NAME=50-asl3-self-signed
+
+PROG=${0##*/}
+mode=if-needed
+extra=()
+
+usage() {
+	awk '/^# Usage:/ { on = 1 } on && !/^#/ { exit } on { sub(/^# ?/, ""); print }' "$0"
+	exit "${1:-0}"
+}
+
+die() {
+	echo "$PROG: $*" >&2
+	exit 3
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--if-needed) mode=if-needed ;;
+		--renew) mode=renew ;;
+		--check) mode=check ;;
+		--name) [ $# -ge 2 ] || die "--name needs a value"; extra+=("$2"); shift ;;
+		# For testing on files other than Apache's.
+		--cert) [ $# -ge 2 ] || die "--cert needs a value"; CERT=$2; shift ;;
+		--key) [ $# -ge 2 ] || die "--key needs a value"; KEY=$2; shift ;;
+		--cockpit-certs) [ $# -ge 2 ] || die "--cockpit-certs needs a value"; COCKPIT_CERTS=$2; shift ;;
+		-h|--help) usage 0 ;;
+		*) echo "$PROG: unknown argument: $1" >&2; usage 3 >&2 ;;
+	esac
+	shift
+done
+
+DNS_RE='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$'
+IPV4_RE='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+IPV6_RE='^[0-9a-f:]*:[0-9a-f:]*$'
+
+# "DNS:name" or "IP:address" for one name, or nothing if it is neither.
+san_entry() {
+	local n=${1,,}
+	n=${n%.}
+	if [[ $n =~ $IPV4_RE || $n =~ $IPV6_RE ]]; then
+		echo "IP:$n"
+	elif [[ $n =~ $DNS_RE ]] && [ ${#n} -le 253 ]; then
+		echo "DNS:$n"
+	fi
+}
+
+x509() {
+	openssl x509 -in "$CERT" -noout "$@" 2>/dev/null
+}
+
+self_signed() {
+	local subject issuer
+	subject=$(x509 -subject -nameopt RFC2253) || return 1
+	issuer=$(x509 -issuer -nameopt RFC2253) || return 1
+	[ "${subject#subject=}" = "${issuer#issuer=}" ]
+}
+
+# The certificate's subjectAltName entries, one per line, as DNS:x or IP:x.
+current_sans() {
+	x509 -ext subjectAltName | tail -n +2 | tr ',' '\n' | sed 's/^ *//; s/^IP Address:/IP:/' | \
+		grep -E '^(DNS|IP):' || true
+}
+
+# Why --if-needed would replace the certificate, one reason per line.
+problems() {
+	local start end lifetime
+	if ! current_sans | grep -q '^DNS:'; then
+		echo "it has no DNS names in a subjectAltName"
+	fi
+	if ! x509 -ext extendedKeyUsage | grep -q 'TLS Web Server Authentication'; then
+		echo "it is not marked for TLS server use (extendedKeyUsage serverAuth)"
+	fi
+	start=$(date -d "$(x509 -startdate | cut -d= -f2)" +%s)
+	end=$(date -d "$(x509 -enddate | cut -d= -f2)" +%s)
+	lifetime=$(( (end - start) / 86400 ))
+	if [ "$lifetime" -gt "$DAYS" ]; then
+		echo "it is valid for $lifetime days; Apple allows at most $DAYS"
+	fi
+	if ! x509 -checkend $((RENEW_BEFORE_DAYS * 86400)) > /dev/null; then
+		echo "it expires within $RENEW_BEFORE_DAYS days ($(x509 -enddate | cut -d= -f2))"
+	fi
+}
+
+generate() {
+	local host short entries=() e san cn group
+	host=$(hostnamectl hostname 2>/dev/null || hostname)
+	host=${host,,}
+	short=${host%%.*}
+	for n in "$short.local" "$short" "$host"; do
+		e=$(san_entry "$n")
+		[ -n "$e" ] && entries+=("$e")
+	done
+	if [ -f "$CERT" ]; then
+		while IFS= read -r e; do
+			e=$(san_entry "${e#*:}")
+			[ -n "$e" ] && entries+=("$e")
+		done < <(current_sans)
+	fi
+	for n in "${extra[@]}"; do
+		e=$(san_entry "$n")
+		[ -n "$e" ] || die "not a DNS name or IP address: $n"
+		entries+=("$e")
+	done
+	san=$(printf '%s\n' "${entries[@]}" | awk '!seen[$0]++' | paste -sd, -)
+	cn=$(printf '%s\n' "${entries[@]}" | grep -m1 '^DNS:' | cut -d: -f2)
+
+	mkdir -p "$(dirname "$CERT")" "$(dirname "$KEY")"
+	rm -f "$KEY.new" "$CERT.new"
+	(umask 077; openssl req -x509 -nodes -sha256 -days "$DAYS" -newkey rsa:2048 \
+		-keyout "$KEY.new" -out "$CERT.new" -subj "/CN=$cn" \
+		-addext "subjectAltName=$san" \
+		-addext "basicConstraints=critical,CA:FALSE" \
+		-addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+		-addext "extendedKeyUsage=serverAuth" 2>/dev/null) || {
+		rm -f "$KEY.new" "$CERT.new"
+		die "openssl could not make the certificate"
+	}
+	# As make-ssl-cert leaves it: the ssl-cert group may read the key.
+	group=root
+	getent group ssl-cert > /dev/null && group=ssl-cert
+	chown "root:$group" "$KEY.new" 2>/dev/null || true
+	chmod 640 "$KEY.new"
+	chmod 644 "$CERT.new"
+	mv "$KEY.new" "$KEY"
+	mv "$CERT.new" "$CERT"
+	echo "Made a new self-signed certificate for $(tr ',' '\n' <<< "$san" | cut -d: -f2- | paste -sd' ' -)," \
+		"valid for $DAYS days: $CERT"
+}
+
+# Cockpit is installed, and its copy differs from the certificate.
+cockpit_differs() {
+	[ -d "$(dirname "$COCKPIT_CERTS")" ] || return 1
+	! cmp -s "$CERT" "$COCKPIT_CERTS/$COCKPIT_NAME.cert" || ! cmp -s "$KEY" "$COCKPIT_CERTS/$COCKPIT_NAME.key"
+}
+
+# Give Cockpit a copy of the certificate, if it is installed and its copy
+# differs, and restart it (only on a running system, not in an image build).
+sync_cockpit() {
+	cockpit_differs || return 0
+	mkdir -p "$COCKPIT_CERTS"
+	install -m 600 "$KEY" "$COCKPIT_CERTS/$COCKPIT_NAME.key.new"
+	install -m 644 "$CERT" "$COCKPIT_CERTS/$COCKPIT_NAME.cert.new"
+	mv "$COCKPIT_CERTS/$COCKPIT_NAME.key.new" "$COCKPIT_CERTS/$COCKPIT_NAME.key"
+	mv "$COCKPIT_CERTS/$COCKPIT_NAME.cert.new" "$COCKPIT_CERTS/$COCKPIT_NAME.cert"
+	echo "Cockpit has a copy of it: $COCKPIT_CERTS/$COCKPIT_NAME.cert"
+	if [ -d /run/systemd/system ]; then
+		systemctl try-restart cockpit.service || true
+	fi
+}
+
+if [ ! -f "$CERT" ]; then
+	[ "$mode" = check ] && { echo "There is no certificate at $CERT."; exit 1; }
+	generate
+	sync_cockpit
+	exit 0
+fi
+
+if ! self_signed; then
+	case "$mode" in
+		check|renew) echo "$CERT is not self-signed; $PROG leaves it alone."; exit 2 ;;
+		*) exit 0 ;;
+	esac
+fi
+
+case "$mode" in
+	check)
+		mapfile -t reasons < <(problems)
+		if [ ${#reasons[@]} -gt 0 ]; then
+			echo "$CERT would be replaced:"
+			printf '  - %s\n' "${reasons[@]}"
+			exit 1
+		fi
+		if cockpit_differs; then
+			echo "$CERT is fine, but Cockpit does not have a copy of it."
+			exit 1
+		fi
+		echo "$CERT is fine."
+		;;
+	if-needed)
+		mapfile -t reasons < <(problems)
+		if [ ${#reasons[@]} -gt 0 ]; then
+			echo "Replacing $CERT:"
+			printf '  - %s\n' "${reasons[@]}"
+			generate
+		fi
+		sync_cockpit
+		;;
+	renew)
+		generate
+		sync_cockpit
+		;;
+esac

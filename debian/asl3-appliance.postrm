@@ -21,6 +21,13 @@ case "$1" in
 			a2ensite -q 000-default default-ssl || true
 		fi
 		rm -f /etc/asl-web-ui/conf.d/50-asl3-appliance.ini
+		# Cockpit's copy of the self-signed certificate, which nothing
+		# renews any more; Cockpit goes back to its own certificate.
+		if [ -e /etc/cockpit/ws-certs.d/50-asl3-self-signed.cert ]; then
+			rm -f /etc/cockpit/ws-certs.d/50-asl3-self-signed.cert \
+				/etc/cockpit/ws-certs.d/50-asl3-self-signed.key
+			deb-systemd-invoke try-restart cockpit.service || true
+		fi
 		if [ -x /usr/libexec/asl-web-ui/asl-web-ui-https-sync ]; then
 			/usr/libexec/asl-web-ui/asl-web-ui-https-sync || true
 		fi
