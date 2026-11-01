@@ -17,6 +17,7 @@ BUILDABLES = \
 	cockpit \
 	fallback-ap \
 	firewalld \
+	ssl \
 	web
 
 ifdef DESTDIR

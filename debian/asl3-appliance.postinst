@@ -82,6 +82,14 @@ EOF
 		fi
 	fi
 
+	# Apache's self-signed certificate, if it is still the one first boot
+	# or make-ssl-cert made: without a subjectAltName and with a ten-year
+	# lifetime, Macs and iPhones cannot trust it, and Safari then refuses
+	# the WebSockets asl-web-ui and Allmon3 need (asl-web-ui#46). Also
+	# renews it when it expires within 30 days. Apache restarts below.
+	/usr/sbin/asl3-self-signed-cert --if-needed || \
+		echo "WARNING: asl3-self-signed-cert failed; Apache keeps its old certificate"
+
 	# Services to start on boot
 	deb-systemd-invoke enable apache2
 	deb-systemd-invoke enable allmon3

@@ -10,6 +10,7 @@ usr/share/asl3-appliance/web/img/*
 usr/share/asl3-appliance/web/css/*
 usr/share/asl3-appliance/web/fonts/*
 usr/share/cockpit/branding/debian-AllStarLink/*
+usr/sbin/asl3-self-signed-cert
 usr/share/doc/asl3-appliance/*
 usr/share/doc/asl3-appliance/*
 
