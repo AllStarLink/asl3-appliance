@@ -86,7 +86,8 @@ EOF
 	# or make-ssl-cert made: without a subjectAltName and with a ten-year
 	# lifetime, Macs and iPhones cannot trust it, and Safari then refuses
 	# the WebSockets asl-web-ui and Allmon3 need (asl-web-ui#46). Also
-	# renews it when it expires within 30 days. Apache restarts below.
+	# renews it when it expires within 30 days, and gives Cockpit a copy.
+	# Apache restarts below.
 	/usr/sbin/asl3-self-signed-cert --if-needed || \
 		echo "WARNING: asl3-self-signed-cert failed; Apache keeps its old certificate"
 

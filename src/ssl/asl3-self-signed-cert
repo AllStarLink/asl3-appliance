@@ -16,10 +16,11 @@
 # Usage: asl3-self-signed-cert [--if-needed | --renew | --check] [--name NAME]...
 #
 #   --if-needed  (the default) replace the certificate if it is self-signed
-#                and breaks one of the rules or expires within 30 days
+#                and breaks one of the rules or expires within 30 days, and
+#                give Cockpit a copy
 #   --renew      replace the certificate if it is self-signed, regardless
 #   --check      only report; exit 0 if it is fine, 1 if --if-needed would
-#                replace it
+#                replace it or give Cockpit a copy
 #   --name NAME  another DNS name or IP address to put in it (repeatable)
 #
 # A certificate that is not self-signed is never replaced: --check and
@@ -29,6 +30,13 @@
 # has a domain, the names and addresses already in the old certificate,
 # and any --name. Apache is not reloaded; the caller does that. A missing
 # certificate is created.
+#
+# If Cockpit is installed, it gets a copy of the certificate, so that one
+# trusted certificate covers both: /etc/cockpit/ws-certs.d/50-asl3-self-signed.cert
+# and .key. Cockpit uses the last *.cert there in alphabetical order, so the
+# copy wins over Cockpit's own 0-self-signed.cert but not over asl-web-ui's
+# Let's Encrypt copy (90-asl-web-ui.cert) or a certificate an admin added
+# with a name starting with a letter. Cockpit restarts when its copy changes.
 
 set -euo pipefail
 
@@ -36,6 +44,8 @@ CERT=/etc/ssl/certs/ssl-cert-snakeoil.pem
 KEY=/etc/ssl/private/ssl-cert-snakeoil.key
 DAYS=825
 RENEW_BEFORE_DAYS=30
+COCKPIT_CERTS=/etc/cockpit/ws-certs.d
+COCKPIT_NAME=50-asl3-self-signed
 
 PROG=${0##*/}
 mode=if-needed
@@ -60,6 +70,7 @@ while [ $# -gt 0 ]; do
 		# For testing on files other than Apache's.
 		--cert) [ $# -ge 2 ] || die "--cert needs a value"; CERT=$2; shift ;;
 		--key) [ $# -ge 2 ] || die "--key needs a value"; KEY=$2; shift ;;
+		--cockpit-certs) [ $# -ge 2 ] || die "--cockpit-certs needs a value"; COCKPIT_CERTS=$2; shift ;;
 		-h|--help) usage 0 ;;
 		*) echo "$PROG: unknown argument: $1" >&2; usage 3 >&2 ;;
 	esac
@@ -164,9 +175,31 @@ generate() {
 		"valid for $DAYS days: $CERT"
 }
 
+# Cockpit is installed, and its copy differs from the certificate.
+cockpit_differs() {
+	[ -d "$(dirname "$COCKPIT_CERTS")" ] || return 1
+	! cmp -s "$CERT" "$COCKPIT_CERTS/$COCKPIT_NAME.cert" || ! cmp -s "$KEY" "$COCKPIT_CERTS/$COCKPIT_NAME.key"
+}
+
+# Give Cockpit a copy of the certificate, if it is installed and its copy
+# differs, and restart it (only on a running system, not in an image build).
+sync_cockpit() {
+	cockpit_differs || return 0
+	mkdir -p "$COCKPIT_CERTS"
+	install -m 600 "$KEY" "$COCKPIT_CERTS/$COCKPIT_NAME.key.new"
+	install -m 644 "$CERT" "$COCKPIT_CERTS/$COCKPIT_NAME.cert.new"
+	mv "$COCKPIT_CERTS/$COCKPIT_NAME.key.new" "$COCKPIT_CERTS/$COCKPIT_NAME.key"
+	mv "$COCKPIT_CERTS/$COCKPIT_NAME.cert.new" "$COCKPIT_CERTS/$COCKPIT_NAME.cert"
+	echo "Cockpit has a copy of it: $COCKPIT_CERTS/$COCKPIT_NAME.cert"
+	if [ -d /run/systemd/system ]; then
+		systemctl try-restart cockpit.service || true
+	fi
+}
+
 if [ ! -f "$CERT" ]; then
 	[ "$mode" = check ] && { echo "There is no certificate at $CERT."; exit 1; }
 	generate
+	sync_cockpit
 	exit 0
 fi
 
@@ -185,6 +218,10 @@ case "$mode" in
 			printf '  - %s\n' "${reasons[@]}"
 			exit 1
 		fi
+		if cockpit_differs; then
+			echo "$CERT is fine, but Cockpit does not have a copy of it."
+			exit 1
+		fi
 		echo "$CERT is fine."
 		;;
 	if-needed)
@@ -194,8 +231,10 @@ case "$mode" in
 			printf '  - %s\n' "${reasons[@]}"
 			generate
 		fi
+		sync_cockpit
 		;;
 	renew)
 		generate
+		sync_cockpit
 		;;
 esac
