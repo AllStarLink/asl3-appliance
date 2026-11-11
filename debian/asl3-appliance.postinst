@@ -45,6 +45,21 @@ do_configure() {
 		fi
 		apache2_invoke ensite 000-asl3-appliance || exit $?
 		apache2_invoke ensite 000-asl3-appliance-ssl || exit $?
+
+		# Access logging honors "dontlog", so snippets in conf-enabled can
+		# leave requests out of it. dpkg keeps a site the admin edited, so
+		# any CustomLog there without a condition gets this one. Apache
+		# restarts below.
+		for site in 000-asl3-appliance 000-asl3-appliance-ssl; do
+			f="/etc/apache2/sites-available/${site}.conf"
+			[ -f "$f" ] || continue
+			# Exits 0 only when some CustomLog has no env= or expr= condition.
+			if perl -ne '$n++ if /^\s*CustomLog\s/ && !/\s(env|expr)=\S+\s*$/;
+					END { exit($n ? 0 : 1) }' "$f"; then
+				perl -pi -e 's/\s*$/ env=!dontlog\n/
+					if /^\s*CustomLog\s/ && !/\s(env|expr)=\S+\s*$/' "$f"
+			fi
+		done
     fi
 
 	# asl-web-ui: the appliance owns Apache's sites, so asl-web-ui only gives
